@@ -1,0 +1,11 @@
+{
+  "name": "my-erp-event-handler",
+  "type": "module",
+  "scripts": {
+    "build": "jco componentize event-handler.ts --wit ./wit --world-name event-handler --disable=all --enable stdio -o module.wasm"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "latest",
+    "@bytecodealliance/componentize-js": "latest"
+  }
+}

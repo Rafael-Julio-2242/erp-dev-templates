@@ -1,0 +1,4 @@
+wit_world/
+module.wasm
+*.zip
+__pycache__/

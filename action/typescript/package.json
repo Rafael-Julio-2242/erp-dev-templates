@@ -1,0 +1,11 @@
+{
+  "name": "my-erp-action",
+  "type": "module",
+  "scripts": {
+    "build": "jco componentize action.ts --wit ./wit --world-name action --disable=all --enable stdio -o module.wasm"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "latest",
+    "@bytecodealliance/componentize-js": "latest"
+  }
+}

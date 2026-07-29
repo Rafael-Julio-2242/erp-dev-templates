@@ -1,0 +1,20 @@
+[module]
+name        = "My Module"
+slug        = "my_module"
+version     = "01.000.000"
+min_core    = "01.000.000"
+author      = "Your Name"
+description = "Template de módulo ERP"
+
+[migrations]
+files = ["0001_init.sql"]
+# destructive = ["0002_drop_old.sql"]
+
+[[pages]]
+slug   = "my-module-dashboard"
+title  = "Dashboard"
+layout = "default"
+
+[[routines]]
+name         = "list_items"
+routine_type = "query"

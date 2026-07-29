@@ -1,0 +1,4 @@
+gen/
+world.wasm
+module.wasm
+*.zip
