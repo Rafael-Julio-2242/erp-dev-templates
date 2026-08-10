@@ -1,4 +1,5 @@
 mod bindings;
+mod erp; // helpers: erp::parse_result(), erp::parse_query(), erp::parse_execute(), erp::ok(), erp::err()
 use bindings::erp_core::component::host;
 
 struct Component;

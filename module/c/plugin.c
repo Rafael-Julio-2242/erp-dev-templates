@@ -1,4 +1,5 @@
 #include "bindings/erp_core.h"
+#include "erp_helpers.h"
 #include <string.h>
 
 static void set_str(erp_core_string_t *s, const char *lit) {

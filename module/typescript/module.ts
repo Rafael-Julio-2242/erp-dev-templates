@@ -1,5 +1,6 @@
 // @ts-ignore
 import { log } from "erp-core:component/host";
+import { parseResult, parseQuery, parseExecute, ok, err } from "./erp";
 
 export const start = (): string => {
     log("info", "module started");
