@@ -1,0 +1,48 @@
+package erp-core:component@0.1.0;
+
+interface host {
+    log:                  func(level: string, msg: string);
+    read-entity:          func(input: string) -> string;
+    list-entities:        func(input: string) -> string;
+    write-entity:         func(input: string) -> string;
+    delete-entity:        func(input: string) -> string;
+    call-routine:         func(input: string) -> string;
+    emit-event:           func(input: string) -> string;
+    query:                func(input: string) -> string;
+    execute:              func(input: string) -> string;
+    describe-entity:      func(input: string) -> string;
+    list-entity-schemas:  func(input: string) -> string;
+    list-modules:         func(input: string) -> string;
+    http-request:         func(input: string) -> string;
+    get-time:             func() -> string;
+    random-uuid:          func() -> string;
+    cache-get:            func(input: string) -> string;
+    cache-set:            func(input: string) -> string;
+    cache-delete:         func(input: string) -> string;
+}
+
+interface module-host {
+    log-mod:                  func(level: string, msg: string);
+    register-endpoint:        func(input: string) -> string;
+    register-event-handler:   func(input: string) -> string;
+}
+
+world module {
+    import host;
+    import module-host;
+    export start:         func() -> string;
+    export stop:          func() -> string;
+    export call-routine:  func(name: string, input: string) -> string;
+    export call-endpoint: func(name: string, method: string, path: string, body: string, headers: string) -> string;
+    export call-event:    func(name: string, trigger: string, entity: string, data: string) -> string;
+}
+
+world action {
+    import host;
+    export execute: func(input: string) -> string;
+}
+
+world event-handler {
+    import host;
+    export on-event: func(entity: string, trigger: string, data: string) -> string;
+}

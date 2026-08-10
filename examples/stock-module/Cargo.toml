@@ -1,0 +1,18 @@
+[package]
+name = "stock-module"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "erp-core:component"
+
+[package.metadata.component.target]
+path = "wit"
+world = "module"
+
+[dependencies]
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json      = { version = "1",     default-features = false, features = ["alloc"] }

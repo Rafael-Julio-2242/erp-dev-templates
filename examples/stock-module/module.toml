@@ -1,0 +1,27 @@
+[module]
+name        = "Stock Manager"
+slug        = "stock"
+version     = "001.000.000"
+description = "Inventory and stock level management"
+min_core    = "001.000.000"
+
+[[migrations]]
+version = 1
+path    = "migrations/0001_create_tables.sql"
+
+[[pages]]
+name  = "Products"
+slug  = "products"
+path  = "pages/products.html"
+
+[[routines]]
+name        = "check_low_stock"
+description = "Returns products below the configured stock threshold"
+language    = "wasm"
+entry_point = "stock:check_low_stock"
+
+[[routines]]
+name        = "restock_product"
+description = "Updates the quantity of a product and emits a restock event"
+language    = "wasm"
+entry_point = "stock:restock_product"
