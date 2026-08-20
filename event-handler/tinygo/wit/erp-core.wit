@@ -19,6 +19,9 @@ interface host {
     cache-get:            func(input: string) -> string;
     cache-set:            func(input: string) -> string;
     cache-delete:         func(input: string) -> string;
+    storage-upload:       func(input: string) -> string;
+    storage-get-url:      func(input: string) -> string;
+    storage-delete:       func(input: string) -> string;
 }
 
 interface module-host {
