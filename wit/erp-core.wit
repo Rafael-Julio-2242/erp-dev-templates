@@ -22,6 +22,8 @@ interface host {
     storage-upload:       func(input: string) -> string;
     storage-get-url:      func(input: string) -> string;
     storage-delete:       func(input: string) -> string;
+    vector-upsert:        func(input: string) -> string;
+    vector-search:        func(input: string) -> string;
 }
 
 interface module-host {

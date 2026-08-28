@@ -1,6 +1,6 @@
 # Host Function Reference
 
-All 18 functions from `interface host` communicate via JSON strings. This document covers exact input/output shapes, permission requirements, and gotchas.
+All 23 functions from `interface host` communicate via JSON strings. This document covers exact input/output shapes, permission requirements, and gotchas.
 
 ---
 
@@ -13,7 +13,7 @@ Four distinct shapes exist across the 18 functions:
 { "success": true,  "data": <value|null>, "message": "" }
 { "success": false, "data": null, "message": "error description" }
 ```
-Used by: `read-entity`, `list-entities`, `write-entity`, `delete-entity`, `emit-event`, `http-request`, `get-time`, `random-uuid`, `cache-get`, `cache-set`, `cache-delete`
+Used by: `read-entity`, `list-entities`, `write-entity`, `delete-entity`, `emit-event`, `http-request`, `get-time`, `random-uuid`, `cache-get`, `cache-set`, `cache-delete`, `vector-upsert`, `vector-search`
 
 ### Query `{rows}` or `{error}`
 ```json
@@ -541,6 +541,147 @@ Remove a key from the cache immediately.
 
 ---
 
+### `storage-upload`
+Upload a file to object storage (MinIO/S3).
+
+**Permission required:** `storage:write`
+
+**Input:**
+```json
+{
+  "filename":     "report.pdf",
+  "content_type": "application/pdf",
+  "purpose":      "attachment",
+  "bytes_base64": "<standard base64-encoded file bytes>"
+}
+```
+
+`purpose` is optional. `content_type` must be a valid MIME type.
+
+**Output (success):**
+```json
+{ "success": true, "id": "uuid", "path": "uploads/2026/uuid.pdf" }
+```
+
+**Output (failure):**
+```json
+{ "success": false, "message": "upload failed: ..." }
+```
+
+---
+
+### `storage-get-url`
+Get a presigned (time-limited) download URL for a stored file.
+
+**Permission required:** `storage:read`
+
+**Input:**
+```json
+{ "media_id": "uuid" }
+```
+
+**Output (success):**
+```json
+{ "success": true, "url": "https://minio:9000/erp-core/uploads/2026/uuid.pdf?X-Amz-...", "expires_in": 3600 }
+```
+
+`expires_in` is the TTL in seconds, controlled by server config.
+
+---
+
+### `storage-delete`
+Delete a stored file from object storage.
+
+**Permission required:** `storage:write`
+
+**Input:**
+```json
+{ "media_id": "uuid" }
+```
+
+**Output (success):**
+```json
+{ "success": true }
+```
+
+---
+
+### `vector-upsert`
+Store or update a vector embedding in the vector store. Scoped to the caller's `company_id`.
+
+**Permission required:** `vector:write`
+
+**Input:**
+```json
+{
+  "collection": "product_embeddings",
+  "id":         "product_001",
+  "embedding":  [0.1, 0.8, -0.3, 0.5],
+  "metadata":   { "name": "Widget A", "category": "tools" }
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `collection` | string | yes | Logical namespace for grouping embeddings |
+| `id` | string | yes | Your identifier for this embedding; upserted on conflict |
+| `embedding` | `[f32]` | yes | Vector of floats — all vectors in a collection must have the same dimension |
+| `metadata` | object | no | Arbitrary JSON stored alongside the embedding; defaults to `{}` |
+
+**Output (success):**
+```json
+{ "success": true }
+```
+
+**Output (failure):**
+```json
+{ "success": false, "message": "error description" }
+```
+
+---
+
+### `vector-search`
+Search for nearest neighbors using cosine similarity. Scoped to the caller's `company_id`.
+
+**Permission required:** `vector:read`
+
+**Input:**
+```json
+{
+  "collection":      "product_embeddings",
+  "query_embedding": [0.1, 0.8, -0.3, 0.5],
+  "top_k":           10
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `collection` | string | yes | Collection to search within |
+| `query_embedding` | `[f32]` | yes | Query vector — must match the dimension of stored vectors |
+| `top_k` | integer | no | Number of results to return (default 10, max 100) |
+
+**Score:** `1.0 - cosine_distance`. Identical vectors score `1.0`; orthogonal vectors score `0.5`; opposite vectors score `0.0`.
+
+**Output (success):**
+```json
+{
+  "success": true,
+  "data": [
+    { "id": "product_001", "score": 0.9987, "metadata": { "name": "Widget A", "category": "tools" } },
+    { "id": "product_002", "score": 0.8412, "metadata": { "name": "Widget B", "category": "tools" } }
+  ]
+}
+```
+
+Results are ordered by score descending (most similar first).
+
+**Output (failure):**
+```json
+{ "success": false, "message": "error description" }
+```
+
+---
+
 ## Quick Reference Table
 
 | Function            | Input fields (required*)                               | Permission          | Envelope     |
@@ -563,3 +704,8 @@ Remove a key from the cache immediately.
 | `cache-get`         | `key*`                                                 | none                | standard     |
 | `cache-set`         | `key*`, `value*`, `ttl_seconds`                        | none                | standard     |
 | `cache-delete`      | `key*`                                                 | none                | standard     |
+| `storage-upload`    | `filename*`, `content_type*`, `bytes_base64*`, `purpose` | `storage:write`   | `{success, id, path}` |
+| `storage-get-url`   | `media_id*`                                            | `storage:read`      | `{success, url, expires_in}` |
+| `storage-delete`    | `media_id*`                                            | `storage:write`     | `{success}`  |
+| `vector-upsert`     | `collection*`, `id*`, `embedding*`, `metadata`         | `vector:write`      | `{success}`  |
+| `vector-search`     | `collection*`, `query_embedding*`, `top_k`             | `vector:read`       | `{success, data[]}` |
