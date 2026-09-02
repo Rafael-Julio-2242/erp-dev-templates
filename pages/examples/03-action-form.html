@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Action Form</title>
+  <style>
+    :root {
+      --bg:      #ffffff;
+      --surface: #f4f4f5;
+      --border:  #e4e4e7;
+      --text:    #09090b;
+      --muted:   #71717a;
+      --accent:  #7c6af5;
+      --error:   #ef4444;
+    }
+    [data-theme="dark"] {
+      --bg:      #0d0f18;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --text:    #e8eaf0;
+      --muted:   #6b7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 32px; max-width: 560px; }
+
+    h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { font-size: .875rem; color: var(--muted); margin-bottom: 28px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    label { font-size: .8125rem; font-weight: 500; }
+    input, select, textarea {
+      height: 36px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface); color: var(--text); font-size: .875rem; outline: none; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    textarea { height: auto; padding: 8px 12px; resize: vertical; }
+    .error-msg { font-size: .75rem; color: var(--error); }
+
+    .row { display: flex; gap: 12px; }
+    .row .field { flex: 1; }
+
+    .actions { display: flex; gap: 8px; margin-top: 8px; }
+    button {
+      height: 36px; padding: 0 16px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); font-size: .875rem; cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .5; cursor: default; }
+  </style>
+</head>
+<body>
+  <h2>Nova solicitação</h2>
+  <p class="subtitle">Preencha os campos abaixo e clique em Enviar.</p>
+
+  <!-- REPLACE 'routine-uuid-here' with your actual routine ID -->
+  <script>var ROUTINE_ID = 'routine-uuid-here';</script>
+
+  <form id="form" novalidate>
+    <div class="row">
+      <div class="field">
+        <label for="title">Título *</label>
+        <input id="title" name="title" type="text" placeholder="Resumo da solicitação">
+        <span class="error-msg" id="err-title"></span>
+      </div>
+      <div class="field">
+        <label for="priority">Prioridade *</label>
+        <select id="priority" name="priority">
+          <option value="">Selecione...</option>
+          <option value="low">Baixa</option>
+          <option value="medium">Média</option>
+          <option value="high">Alta</option>
+        </select>
+        <span class="error-msg" id="err-priority"></span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="description">Descrição</label>
+      <textarea id="description" name="description" rows="4" placeholder="Detalhes adicionais..."></textarea>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="primary" id="btn-submit">Enviar</button>
+      <button type="button" id="btn-clear">Limpar</button>
+    </div>
+  </form>
+
+  <script>
+    var form = document.getElementById('form');
+
+    function getValues() {
+      return {
+        title:       document.getElementById('title').value.trim(),
+        priority:    document.getElementById('priority').value,
+        description: document.getElementById('description').value.trim(),
+      };
+    }
+
+    function clearErrors() {
+      document.getElementById('err-title').textContent    = '';
+      document.getElementById('err-priority').textContent = '';
+    }
+
+    function validate(vals) {
+      var ok = true;
+      if (!vals.title)    { document.getElementById('err-title').textContent    = 'Campo obrigatório.'; ok = false; }
+      if (!vals.priority) { document.getElementById('err-priority').textContent = 'Selecione uma prioridade.'; ok = false; }
+      return ok;
+    }
+
+    function clearForm() {
+      document.getElementById('title').value       = '';
+      document.getElementById('priority').value    = '';
+      document.getElementById('description').value = '';
+      clearErrors();
+    }
+
+    async function submit(extra) {
+      var vals = Object.assign(getValues(), extra || {});
+      clearErrors();
+      if (!extra && !validate(vals)) return;
+
+      var btn = document.getElementById('btn-submit');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      var res = await ERP.execute(ROUTINE_ID, vals);
+
+      btn.disabled = false;
+      btn.textContent = 'Enviar';
+
+      // parseDirective handles toast, modal, confirm, input_form, redirect
+      await ERP.parseDirective(res, {
+        // Called if the directive is 'confirm' and the user confirms
+        execute: function(extra) { return submit(extra); },
+        // Called if the directive is 'reload'
+        load: function() { clearForm(); },
+      });
+
+      // If routine succeeded without a directive, clear the form
+      if (!res.error && res.data && res.data.success && !res.data.directive) {
+        clearForm();
+      }
+    }
+
+    document.getElementById('btn-submit').addEventListener('click', function() { submit(); });
+    document.getElementById('btn-clear').addEventListener('click', clearForm);
+  </script>
+</body>
+</html>

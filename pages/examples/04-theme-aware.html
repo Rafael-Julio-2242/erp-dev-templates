@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Theme Aware</title>
+  <style>
+    /*
+      The ERP SDK sets html[data-theme="dark"|"light"] automatically and
+      keeps it in sync with the shell. Use CSS custom properties on :root
+      and override them under [data-theme="dark"].
+    */
+    :root {
+      --bg:          #ffffff;
+      --surface:     #f4f4f5;
+      --surface-2:   #e4e4e7;
+      --border:      #e4e4e7;
+      --text:        #09090b;
+      --muted:       #71717a;
+      --accent:      #7c6af5;
+      --accent-soft: #ede9fe;
+      --success:     #22c55e;
+      --warning:     #f59e0b;
+    }
+
+    [data-theme="dark"] {
+      --bg:          #0d0f18;
+      --surface:     #1a1d27;
+      --surface-2:   #252836;
+      --border:      #2a2d3a;
+      --text:        #e8eaf0;
+      --muted:       #6b7280;
+      --accent-soft: #3b2e7e44;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 32px; transition: background .2s, color .2s; }
+
+    /* Theme badge */
+    .theme-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 99px; font-size: .8125rem; font-weight: 500;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid var(--accent); margin-bottom: 28px;
+    }
+
+    /* Card grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px;
+      transition: background .2s, border-color .2s;
+    }
+    .card-title { font-size: .8125rem; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em; }
+    .card-value { font-size: 1.5rem; font-weight: 700; }
+    .card-value.accent  { color: var(--accent); }
+    .card-value.success { color: var(--success); }
+    .card-value.warning { color: var(--warning); }
+
+    /* Chart bar (fake) */
+    h3 { font-size: .9375rem; font-weight: 600; margin-bottom: 12px; }
+    .bars { display: flex; gap: 6px; align-items: flex-end; height: 80px; }
+    .bar {
+      flex: 1; border-radius: 4px 4px 0 0;
+      background: var(--accent); opacity: .6;
+      transition: opacity .15s, background .2s;
+    }
+    .bar:hover { opacity: 1; }
+    [data-theme="dark"] .bar { opacity: .75; }
+
+    /* Dot indicator */
+    .legend { display: flex; gap: 16px; margin-top: 8px; font-size: .8125rem; color: var(--muted); }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <!-- Theme badge updates when user switches shell theme -->
+  <div class="theme-badge">
+    <span id="theme-dot" style="width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block"></span>
+    Tema: <strong id="theme-label">–</strong>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Pedidos hoje</div>
+      <div class="card-value accent" id="val-orders">–</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Receita (R$)</div>
+      <div class="card-value success" id="val-revenue">–</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pendentes</div>
+      <div class="card-value warning" id="val-pending">–</div>
+    </div>
+  </div>
+
+  <h3>Atividade — últimos 7 dias</h3>
+  <div class="bars" id="bars"></div>
+  <div class="legend">
+    <span><span class="dot"></span>Pedidos</span>
+  </div>
+
+  <script>
+    // ── Theme badge ───────────────────────────────────────────────────────────
+
+    function updateThemeBadge(theme) {
+      document.getElementById('theme-label').textContent = theme === 'dark' ? 'Escuro' : 'Claro';
+    }
+
+    updateThemeBadge(ERP.theme());
+
+    // Fires whenever user switches theme in the shell
+    ERP.onThemeChange(function(theme) {
+      updateThemeBadge(theme);
+    });
+
+    // ── Load data ─────────────────────────────────────────────────────────────
+
+    async function loadMetrics() {
+      var res = await ERP.query(
+        'SELECT count(*) AS total, sum(total_value) AS revenue, count(*) FILTER (WHERE status = $1) AS pending FROM mod_sales.orders WHERE created_at >= CURRENT_DATE',
+        ['pending']
+      );
+
+      if (!res.error && res.data && res.data.rows && res.data.rows[0]) {
+        var r = res.data.rows[0];
+        document.getElementById('val-orders').textContent  = r.total   ?? 0;
+        document.getElementById('val-revenue').textContent = r.revenue  ? Number(r.revenue).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0,00';
+        document.getElementById('val-pending').textContent = r.pending  ?? 0;
+      }
+    }
+
+    async function loadChart() {
+      var res = await ERP.query(
+        "SELECT DATE(created_at) AS day, count(*) AS cnt FROM mod_sales.orders WHERE created_at >= CURRENT_DATE - INTERVAL '7 days' GROUP BY 1 ORDER BY 1"
+      );
+
+      if (res.error || !res.data) return;
+
+      var rows = res.data.rows || [];
+      var max  = rows.reduce(function(m, r) { return Math.max(m, Number(r.cnt)); }, 1);
+      var bars = document.getElementById('bars');
+
+      bars.innerHTML = rows.map(function(r) {
+        var pct = Math.max(8, Math.round((Number(r.cnt) / max) * 100));
+        return '<div class="bar" style="height:' + pct + '%" title="' + ERP.esc(r.day) + ': ' + r.cnt + ' pedidos"></div>';
+      }).join('');
+
+      if (rows.length === 0) {
+        bars.innerHTML = '<p style="color:var(--muted);font-size:.875rem">Sem dados.</p>';
+      }
+    }
+
+    loadMetrics();
+    loadChart();
+  </script>
+</body>
+</html>

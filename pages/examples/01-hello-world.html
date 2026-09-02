@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hello World</title>
+  <style>
+    /* Theme: the SDK sets html[data-theme] automatically */
+    :root {
+      --bg:      #ffffff;
+      --surface: #f4f4f5;
+      --border:  #e4e4e7;
+      --text:    #09090b;
+      --muted:   #71717a;
+      --accent:  #7c6af5;
+    }
+    [data-theme="dark"] {
+      --bg:      #0d0f18;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --text:    #e8eaf0;
+      --muted:   #6b7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 32px; }
+
+    h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 4px; }
+    p  { font-size: .875rem; color: var(--muted); margin-bottom: 24px; }
+
+    button {
+      height: 36px;
+      padding: 0 16px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: .875rem;
+      cursor: pointer;
+    }
+    button:hover { opacity: .85; }
+    button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+
+    ul { margin-top: 16px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    li {
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: .875rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Olá, <span id="user-name">...</span></h1>
+  <p id="user-email">Carregando...</p>
+
+  <button class="primary" id="btn-load">Buscar empresas</button>
+
+  <ul id="list"></ul>
+
+  <script>
+    // ERP SDK is auto-injected — window.ERP is ready
+
+    const user = ERP.user();
+    document.getElementById('user-name').textContent  = user?.name  ?? 'visitante';
+    document.getElementById('user-email').textContent = user?.email ?? '';
+
+    document.getElementById('btn-load').addEventListener('click', async () => {
+      const res = await ERP.read('companies', {
+        filters: [{ order: 1, group: 1, field: 'is_active', op: 'eq', value: 'true' }],
+        limit: 5,
+      });
+
+      if (res.error) {
+        ERP.toast('Erro ao buscar empresas: ' + res.error, 'error');
+        return;
+      }
+
+      const list = document.getElementById('list');
+      list.innerHTML = res.data.items
+        .map(c => `<li>${ERP.esc(c.name)}</li>`)
+        .join('');
+
+      if (res.data.items.length === 0) {
+        list.innerHTML = '<li style="color:var(--muted)">Nenhuma empresa encontrada.</li>';
+      }
+    });
+  </script>
+</body>
+</html>

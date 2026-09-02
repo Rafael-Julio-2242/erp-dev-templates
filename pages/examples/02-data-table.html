@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data Table</title>
+  <style>
+    :root {
+      --bg:      #ffffff;
+      --surface: #f4f4f5;
+      --border:  #e4e4e7;
+      --text:    #09090b;
+      --muted:   #71717a;
+      --accent:  #7c6af5;
+      --accent-fg: #fff;
+    }
+    [data-theme="dark"] {
+      --bg:      #0d0f18;
+      --surface: #1a1d27;
+      --border:  #2a2d3a;
+      --text:    #e8eaf0;
+      --muted:   #6b7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+
+    .toolbar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--bg); flex-shrink: 0;
+    }
+    .toolbar input {
+      flex: 1; height: 36px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface); color: var(--text); font-size: .875rem; outline: none;
+    }
+    .toolbar input:focus { border-color: var(--accent); }
+    .toolbar button {
+      height: 36px; padding: 0 14px;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface); color: var(--text); font-size: .875rem; cursor: pointer;
+    }
+    .toolbar button:hover { opacity: .85; }
+
+    .table-wrap { flex: 1; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    thead tr { background: var(--surface); }
+    th { padding: 10px 16px; text-align: left; font-weight: 500; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    tr:hover td { background: var(--surface); }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 500;
+    }
+    .badge.green { background: #dcfce7; color: #166534; }
+    .badge.gray  { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    [data-theme="dark"] .badge.green { background: #14532d44; color: #4ade80; }
+
+    .pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-top: 1px solid var(--border); font-size: .8125rem; color: var(--muted); flex-shrink: 0;
+    }
+    .pagination .pg-btns { display: flex; gap: 4px; }
+    .pagination button {
+      height: 28px; min-width: 28px; padding: 0 8px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--surface); color: var(--text); font-size: .8125rem; cursor: pointer;
+    }
+    .pagination button:hover { opacity: .85; }
+    .pagination button:disabled { opacity: .4; cursor: default; }
+
+    .empty { text-align: center; padding: 40px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Buscar...">
+    <button id="btn-search">Buscar</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>E-mail</th>
+          <th>Status</th>
+          <th>Criado em</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty" hidden>Nenhum resultado encontrado.</div>
+  </div>
+
+  <div class="pagination">
+    <span id="pg-info">–</span>
+    <div class="pg-btns">
+      <button id="pg-prev" disabled>&#8249;</button>
+      <button id="pg-next" disabled>&#8250;</button>
+    </div>
+  </div>
+
+  <script>
+    var PAGE_SIZE = 20;
+    var state = { search: '', page: 0, total: 0 };
+
+    async function load() {
+      var res = await ERP.read('users', {
+        filters: state.search
+          ? [{ order: 1, group: 1, field: 'name', op: 'ilike', value: '%' + state.search + '%' }]
+          : [],
+        sort_by: 'created_at',
+        sort_order: 'desc',
+        limit:  PAGE_SIZE,
+        offset: state.page * PAGE_SIZE,
+      });
+
+      if (res.error) { ERP.toast('Erro ao carregar: ' + res.error, 'error'); return; }
+
+      var items = res.data.items;
+      state.total = res.data.total;
+
+      var tbody = document.getElementById('tbody');
+      var empty = document.getElementById('empty');
+
+      if (items.length === 0) {
+        tbody.innerHTML = '';
+        empty.hidden = false;
+      } else {
+        empty.hidden = true;
+        tbody.innerHTML = items.map(function(u) {
+          return '<tr>'
+            + '<td>' + ERP.esc(u.name) + '</td>'
+            + '<td>' + ERP.esc(u.email || '–') + '</td>'
+            + '<td><span class="badge ' + (u.is_active ? 'green' : 'gray') + '">'
+            + (u.is_active ? 'Ativo' : 'Inativo') + '</span></td>'
+            + '<td>' + (u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '–') + '</td>'
+            + '</tr>';
+        }).join('');
+      }
+
+      var from = state.page * PAGE_SIZE + 1;
+      var to   = Math.min(from + items.length - 1, state.total);
+      document.getElementById('pg-info').textContent =
+        items.length ? from + '–' + to + ' de ' + state.total : '0 resultados';
+      document.getElementById('pg-prev').disabled = state.page === 0;
+      document.getElementById('pg-next').disabled = to >= state.total;
+    }
+
+    document.getElementById('btn-search').addEventListener('click', function() {
+      state.search = document.getElementById('search').value.trim();
+      state.page = 0;
+      load();
+    });
+
+    document.getElementById('search').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('btn-search').click();
+    });
+
+    document.getElementById('pg-prev').addEventListener('click', function() {
+      state.page--;
+      load();
+    });
+
+    document.getElementById('pg-next').addEventListener('click', function() {
+      state.page++;
+      load();
+    });
+
+    load();
+  </script>
+</body>
+</html>
