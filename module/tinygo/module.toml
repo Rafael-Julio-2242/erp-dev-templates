@@ -15,6 +15,17 @@ slug   = "my-module-dashboard"
 title  = "Dashboard"
 layout = "default"
 
+[[nav.folders]]
+slug       = "my-module"
+title      = "My Module"
+parent     = "core"
+sort_order = 10
+
+[[nav.items]]
+page       = "my-module-dashboard"
+folder     = "my-module"
+sort_order = 0
+
 [[routines]]
 name         = "list_items"
 routine_type = "query"

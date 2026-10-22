@@ -10,7 +10,7 @@ Custom pages are HTML files uploaded to the ERP platform. They run inside a sand
 1. Create page via admin UI (Pages → New)
 2. Upload your .html file
 3. Optionally attach CSS and JS files separately
-4. The page appears in the navigation sidebar
+4. The page appears in the navigation sidebar when assigned to a folder via `[[nav.items]]` in `module.toml` (for module pages) or manually via the admin UI
 5. Users open it as a tab — the ERP.js SDK is auto-injected
 ```
 
