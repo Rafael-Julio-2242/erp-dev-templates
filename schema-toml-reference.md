@@ -368,7 +368,7 @@ code = "FURN"
 ```
 
 Rules:
-- All rows use `ON CONFLICT DO NOTHING` — re-installs are safe.
+- All rows use `ON CONFLICT DO NOTHING`. Deduplication only works when the table has a unique constraint that the seed row would violate — tables without one will accumulate duplicate rows on each re-install. Add a `[[schema.tables.indexes]]` entry with `unique = true` on any natural key you want to deduplicate on.
 - The entity must be declared in the same module's `schema.toml` or `entities/` folder.
 - Cross-module seeding is not allowed; the installer rejects seeds targeting another module's tables.
 - Column list is derived from the first row; all rows must have the same keys.

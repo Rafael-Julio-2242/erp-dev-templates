@@ -365,7 +365,7 @@ code = "FURN"
 ```
 
 Regras:
-- Todas as linhas usam `ON CONFLICT DO NOTHING` — re-instalações são seguras.
+- Todas as linhas usam `ON CONFLICT DO NOTHING`. A deduplicação só funciona quando a tabela possui uma unique constraint que a linha do seed violaria — tabelas sem uma acumularão linhas duplicadas a cada re-instalação. Adicione uma entrada `[[schema.tables.indexes]]` com `unique = true` em qualquer chave natural que queira deduplicar.
 - A entidade deve ser declarada no `schema.toml` ou na pasta `entities/` do mesmo módulo.
 - Seeding entre módulos não é permitido; o instalador rejeita seeds direcionados a tabelas de outro módulo.
 - A lista de colunas é derivada da primeira linha; todas as linhas devem ter as mesmas chaves.
