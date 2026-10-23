@@ -70,6 +70,8 @@ Use `schema.toml` alongside SQL-only modules to declare tables, extend core tabl
 
 See [`operation-driven-modules.md`](operation-driven-modules.md) for the required pattern when building modules that affect business-critical workflows (fiscal, stock, pricing, printing, compliance). The core rule: any setting that could differ between two operations in the same company must be stored per `operation_id`, never in a global config table.
 
+See [`event-emission-guide.md`](event-emission-guide.md) for the required pattern when any module mutates state. The core rule: every write and every delete must emit a domain event after it succeeds, following the `{module}.{entity}.{verb}` naming convention.
+
 ## entities/ Folder
 
 The optional `entities/` folder (one `.toml` per entity) is a higher-level alternative to `schema.toml` for modules that want both DDL and an auto-generated SchemaForm UI page per entity. Files with only `[table]` create the table and register meta rows; files with `[table]` + `[form]` also create a SchemaForm page in the navigation.
