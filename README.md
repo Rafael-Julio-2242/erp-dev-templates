@@ -66,6 +66,10 @@ wasm     = false
 
 Use `schema.toml` alongside SQL-only modules to declare tables, extend core tables, and register entities automatically without writing manual migrations. See [`schema-toml-reference.md`](schema-toml-reference.md).
 
+## Best Practices
+
+See [`operation-driven-modules.md`](operation-driven-modules.md) for the required pattern when building modules that affect business-critical workflows (fiscal, stock, pricing, printing, compliance). The core rule: any setting that could differ between two operations in the same company must be stored per `operation_id`, never in a global config table.
+
 ## entities/ Folder
 
 The optional `entities/` folder (one `.toml` per entity) is a higher-level alternative to `schema.toml` for modules that want both DDL and an auto-generated SchemaForm UI page per entity. Files with only `[table]` create the table and register meta rows; files with `[table]` + `[form]` also create a SchemaForm page in the navigation.
