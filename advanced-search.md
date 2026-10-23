@@ -31,14 +31,15 @@ All search endpoints (`POST /api/<domain>/search`) and the `list-entities` WASM 
 }
 ```
 
-| Field   | Type    | Required | Notes |
-|---------|---------|----------|-------|
-| `order` | integer | ✅ | Unique across all filters. Determines evaluation order (lowest first). |
-| `group` | integer | ✅ | Filters with the same consecutive `group` are parenthesised together. |
-| `field` | string  | ✅ | Column name. Must be in the endpoint's allowlist. |
-| `op`    | string  | ✅ | See operators below. |
-| `value` | any     | ⚠️ | Required for all ops except `is_null` / `not_null`. Array for `in` / `not_in`. |
-| `logic` | string  | ⚠️ | `"and"` or `"or"`. Required on every filter **except the one with the lowest `order`**. |
+| Field       | Type    | Required | Notes |
+|-------------|---------|----------|-------|
+| `order`     | integer | ✅ | Unique across all filters. Determines evaluation order (lowest first). |
+| `group`     | integer | ✅ | Filters with the same consecutive `group` are parenthesised together. |
+| `field`     | string  | ✅ | Column name. Must be in the endpoint's allowlist. |
+| `op`        | string  | ✅ | See operators below. |
+| `value`     | any     | ⚠️ | Required for all ops except `is_null` / `not_null`. Array for `in` / `not_in`. |
+| `logic`     | string  | ⚠️ | `"and"` or `"or"`. Required on every filter **except the one with the lowest `order`**. |
+| `is_variable` | bool | ❌ | When `true`, marks this clause as a runtime variable in saved filter templates. The `value` acts as a placeholder name. Default: `false`. Only relevant when building saved/reusable filter sets — ignore for normal queries. |
 
 ---
 

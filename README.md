@@ -32,6 +32,25 @@ make zip     # → my-module.zip (contains module.toml + module.wasm + migration
 
 Upload `my-module.zip` to ERP Core via `/api/modules/install`.
 
+## Sidebar Navigation
+
+Module pages appear in the sidebar when assigned to a folder via `module.toml`:
+
+```toml
+[[nav.folders]]
+slug       = "my-module"
+title      = "My Module"
+parent     = "core"     # optional — path of parent folder
+sort_order = 10
+
+[[nav.items]]
+page       = "my-module-dashboard"  # must match a [[pages]] slug
+folder     = "my-module"
+sort_order = 0
+```
+
+Folders are created on install and deleted on uninstall. Pages not assigned to a folder remain accessible but don't appear in the sidebar tree.
+
 ## SQL-only modules
 
 Modules that need no WASM logic — only database schema and migrations — can set `wasm = false` in `module.toml` and omit `module.wasm` from the ZIP:
@@ -46,6 +65,12 @@ wasm     = false
 ```
 
 Use `schema.toml` alongside SQL-only modules to declare tables, extend core tables, and register entities automatically without writing manual migrations. See [`schema-toml-reference.md`](schema-toml-reference.md).
+
+## entities/ Folder
+
+The optional `entities/` folder (one `.toml` per entity) is a higher-level alternative to `schema.toml` for modules that want both DDL and an auto-generated SchemaForm UI page per entity. Files with only `[table]` create the table and register meta rows; files with `[table]` + `[form]` also create a SchemaForm page in the navigation.
+
+See [`entities-folder-reference.md`](entities-folder-reference.md) for the full TOML spec.
 
 ## Transport
 

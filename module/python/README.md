@@ -23,3 +23,14 @@ make zip       # packages → my-module.zip (upload to ERP Core)
 - `call_routine(name, input) → str`
 - `call_endpoint(name, method, path, body, headers) → str`
 - `call_event(name, trigger, entity, data) → str`
+
+## module.toml
+
+Edit `module.toml` before packaging:
+
+- `[[pages]]` — HTML files shipped in the ZIP
+- `[[nav.folders]]` / `[[nav.items]]` — register pages in the sidebar
+- `[[routines]]` — callable server-side routines
+- `[migrations]` — SQL files to run on install (`mod_{slug}` schema)
+
+Full reference: [`../../erp-dev-templates.md`](../../erp-dev-templates.md)

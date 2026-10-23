@@ -6,7 +6,7 @@ All 23 functions from `interface host` communicate via JSON strings. This docume
 
 ## Response Envelopes
 
-Four distinct shapes exist across the 18 functions:
+Five distinct shapes exist across the 23 functions:
 
 ### Standard `{success, data, message}`
 ```json
