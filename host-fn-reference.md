@@ -212,7 +212,7 @@ Emit an event into the system (written to outbox → NATS → SSE fans out to su
 }
 ```
 
-`event_type` must match a slug registered in `meta.event_types`. Event also triggers any WASM event handlers registered via `register-event-handler`.
+`event_type` must match a slug registered in `core.event_types`. Event also triggers any WASM event handlers registered via `register-event-handler`.
 
 **Output:**
 ```json

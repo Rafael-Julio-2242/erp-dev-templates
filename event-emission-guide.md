@@ -165,19 +165,34 @@ for item in &items {
 
 ## Event types must be registered
 
-`emit-event` requires the `event_type` slug to exist in `meta.event_types`.
-Register your module's event types in a migration:
+`emit-event` requires the `event_type` slug to exist in `core.event_types`.
+Register your module's event types in `schema.toml` using the `[[event_types]]`
+section — no migration needed:
 
-```sql
--- migrations/0002_register_event_types.sql
-INSERT INTO meta.event_types (slug, label, description, schema_version)
-VALUES
-    ('stock.product.created',  'Produto criado',   'Emitido quando um produto é cadastrado', 1),
-    ('stock.product.updated',  'Produto atualizado', 'Emitido quando um produto é alterado',  1),
-    ('stock.product.deleted',  'Produto removido', 'Emitido quando um produto é excluído',   1),
-    ('stock.movement.created', 'Movimentação de estoque', 'Emitido a cada entrada ou saída de estoque', 1)
-ON CONFLICT (slug) DO NOTHING;
+```toml
+[[event_types]]
+slug        = "stock.product.created"
+name        = "Product Created"
+description = "Emitted when a product is registered"
+
+[[event_types]]
+slug        = "stock.product.updated"
+name        = "Product Updated"
+description = "Emitted when a product is modified"
+
+[[event_types]]
+slug        = "stock.product.deleted"
+name        = "Product Deleted"
+description = "Emitted when a product is removed"
+
+[[event_types]]
+slug        = "stock.movement.created"
+name        = "Stock Movement"
+description = "Emitted on every stock entry or exit"
 ```
+
+Event types declared here are inserted into `core.event_types` during install
+with `ON CONFLICT (slug) DO NOTHING`, so re-installs are safe.
 
 If you skip this, `emit-event` will return `success: false` and the event
 will be silently dropped.

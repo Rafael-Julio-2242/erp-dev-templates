@@ -2,16 +2,17 @@
 
 The optional `entities/` folder inside a module ZIP lets you declare tables and SchemaForm pages using a TOML DSL instead of hand-writing SQL migrations.
 
-One `.toml` file = one entity. Core processes every file in this folder on install, after `migrations/` and `schema.toml` have been applied.
+One `.toml` file = one entity. Core processes every file in this folder on install, after `schema.toml` has been applied.
 
 ---
 
 ## Rules
 
-- **Table-only** (`[table]` section, no `[form]`): Core creates the table in `mod_{slug}` schema, registers `meta.entity_definitions`, and seeds `meta.field_definitions` for every declared column. No UI page is created.
+- **Table-only** (`[table]` section, no `[form]`): Core creates the table in `mod_{slug}` schema, registers `meta.entity_definitions`, seeds `meta.field_definitions` for every declared column, and auto-seeds `read/create/update/delete` permissions in `core.permissions`. No UI page is created.
 - **Table + form** (`[table]` + `[form]` sections): same as above, plus Core creates a `meta.page_definitions` row so the entity appears as a SchemaForm page in the navigation.
 - **Idempotent**: install is a no-op when the table already matches (same hash). Safe to re-install.
-- **Uninstall**: `meta.entity_definitions` rows are deleted (cascade-deletes `field_definitions` and `page_definitions`). Tables in `mod_{slug}` are **not dropped** — use SQL migrations for destructive DDL.
+- **Permissions**: `read`, `create`, `update`, `delete` are auto-seeded for each entity on every install with `ON CONFLICT DO NOTHING`.
+- **Uninstall**: `meta.entity_definitions` rows are deleted (cascade-deletes `field_definitions` and `page_definitions`). Tables in `mod_{slug}` are **not dropped**.
 
 ---
 

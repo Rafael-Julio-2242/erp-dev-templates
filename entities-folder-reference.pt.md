@@ -2,16 +2,17 @@
 
 A pasta opcional `entities/` dentro de um ZIP de módulo permite declarar tabelas e páginas SchemaForm usando um DSL TOML em vez de escrever migrations SQL manualmente.
 
-Um arquivo `.toml` = uma entidade. O Core processa cada arquivo desta pasta na instalação, após a aplicação de `migrations/` e `schema.toml`.
+Um arquivo `.toml` = uma entidade. O Core processa cada arquivo desta pasta na instalação, após a aplicação de `schema.toml`.
 
 ---
 
 ## Regras
 
-- **Somente tabela** (`[table]` sem `[form]`): o Core cria a tabela no schema `mod_{slug}`, registra `meta.entity_definitions` e semeia `meta.field_definitions` para cada coluna declarada. Nenhuma página de interface é criada.
+- **Somente tabela** (`[table]` sem `[form]`): o Core cria a tabela no schema `mod_{slug}`, registra `meta.entity_definitions`, semeia `meta.field_definitions` para cada coluna declarada e insere automaticamente permissões `read/create/update/delete` em `core.permissions`. Nenhuma página de interface é criada.
 - **Tabela + formulário** (`[table]` + `[form]`): igual ao acima, mais a criação de uma linha em `meta.page_definitions` para que a entidade apareça como página SchemaForm na navegação.
 - **Idempotente**: a instalação é um no-op quando a tabela já corresponde (mesmo hash). Seguro para reinstalar.
-- **Desinstalação**: as linhas em `meta.entity_definitions` são removidas (cascade em `field_definitions` e `page_definitions`). Tabelas em `mod_{slug}` **não são removidas** — use migrations SQL para DDL destrutivo.
+- **Permissões**: `read`, `create`, `update`, `delete` são inseridas automaticamente para cada entidade em toda instalação com `ON CONFLICT DO NOTHING`.
+- **Desinstalação**: as linhas em `meta.entity_definitions` são removidas (cascade em `field_definitions` e `page_definitions`). Tabelas em `mod_{slug}` **não são removidas**.
 
 ---
 

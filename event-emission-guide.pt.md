@@ -165,19 +165,35 @@ for item in &items {
 
 ## Tipos de evento devem ser registrados
 
-`emit-event` exige que o slug do `event_type` exista em `meta.event_types`.
-Registre os tipos de evento do seu módulo em uma migration:
+`emit-event` exige que o slug do `event_type` exista em `core.event_types`.
+Registre os tipos de evento do seu módulo no `schema.toml` usando a seção
+`[[event_types]]` — sem necessidade de migration:
 
-```sql
--- migrations/0002_register_event_types.sql
-INSERT INTO meta.event_types (slug, label, description, schema_version)
-VALUES
-    ('stock.product.created',  'Produto criado',   'Emitido quando um produto é cadastrado', 1),
-    ('stock.product.updated',  'Produto atualizado', 'Emitido quando um produto é alterado',  1),
-    ('stock.product.deleted',  'Produto removido', 'Emitido quando um produto é excluído',   1),
-    ('stock.movement.created', 'Movimentação de estoque', 'Emitido a cada entrada ou saída de estoque', 1)
-ON CONFLICT (slug) DO NOTHING;
+```toml
+[[event_types]]
+slug        = "stock.product.created"
+name        = "Produto Criado"
+description = "Emitido quando um produto é cadastrado"
+
+[[event_types]]
+slug        = "stock.product.updated"
+name        = "Produto Atualizado"
+description = "Emitido quando um produto é alterado"
+
+[[event_types]]
+slug        = "stock.product.deleted"
+name        = "Produto Removido"
+description = "Emitido quando um produto é excluído"
+
+[[event_types]]
+slug        = "stock.movement.created"
+name        = "Movimentação de Estoque"
+description = "Emitido a cada entrada ou saída de estoque"
 ```
+
+Os tipos de evento declarados aqui são inseridos em `core.event_types` durante
+a instalação com `ON CONFLICT (slug) DO NOTHING`, portanto re-instalações são
+seguras.
 
 Se você pular esse passo, `emit-event` retornará `success: false` e o evento
 será descartado silenciosamente.

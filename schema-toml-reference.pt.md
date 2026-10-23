@@ -6,17 +6,21 @@
 
 ## Por que schema.toml vs migrations SQL
 
-| Aspecto | Migrations SQL | `schema.toml` |
-|---------|---------------|---------------|
-| Requer escrever DDL | Sim | Não |
-| Registro de linhas meta | Manual | Automático |
-| Reaplicação idempotente | Rastreado por `schema_migrations` | Rastreado por hash SHA-256 (`schema_state`) |
-| Delta de atualização | Migration completa por mudança | Gerado por diff — apenas objetos novos |
-| Triggers / funções | DDL completo | Corpo inline ou referência de função |
-| Operações destrutivas | Opt-in via `migrations.destructive` | Não suportado (somente aditivo) |
-| Lógica complexa / backfills de dados | Mais adequado | Use migration SQL |
+| Aspecto | `schema.toml` |
+|---------|---------------|
+| Requer escrever DDL | Não — declarativo |
+| Registro de linhas meta | Automático |
+| Seeding de permissões | Automático (read/create/update/delete por entidade) |
+| Registro de tipos de evento | Declarativo via `[[event_types]]` |
+| Reaplicação idempotente | Rastreado por hash SHA-256 (`schema_state`) |
+| Delta de atualização | Gerado por diff — apenas objetos novos aplicados |
+| Triggers / funções | Corpo inline ou referência de função |
+| Operações destrutivas | Não suportado (somente aditivo) |
+| Lógica complexa / backfills de dados | Use a pasta `seeds/` ou host functions no `start()` |
 
-Use `schema.toml` para tudo que um novo módulo precisa no primeiro dia. Adicione migrations SQL para mudanças destrutivas (renomeações, mudanças de tipo, remoções) ou backfills de dados. Ambos podem coexistir no mesmo ZIP — o Core aplica migrations SQL primeiro, depois `schema.toml`.
+ZIPs de módulos externos **não podem** incluir uma pasta `migrations/` com arquivos SQL.
+Use `schema.toml`, `entities/` e `seeds/` em vez disso. O sistema de migrations de
+desenvolvimento do Core (arquivos em `migrations/postgres/*.sql`) é separado e não é afetado.
 
 ---
 
@@ -24,13 +28,18 @@ Use `schema.toml` para tudo que um novo módulo precisa no primeiro dia. Adicion
 
 ```
 module.zip
-├── module.toml          (obrigatório)
-├── module.wasm          (opcional — omitir para módulos wasm = false)
-├── migrations/          (opcional)
-│   └── 0001_init.sql
-├── pages/               (opcional)
-└── schema.toml          (opcional — este documento)
+├── module.toml              (obrigatório)
+├── module.wasm              (opcional — omitir para módulos wasm = false)
+├── pages/                   (opcional)
+├── entities/                (opcional — um .toml por entidade)
+│   └── products.toml
+├── seeds/                   (opcional — dados INSERT-only)
+│   └── categories.toml
+└── schema.toml              (opcional — este documento)
 ```
+
+> **Nota:** `migrations/` não é permitido em ZIPs de módulos externos. Qualquer ZIP com uma
+> lista `migrations.files` não vazia será rejeitado com erro `422`.
 
 ---
 
@@ -155,6 +164,38 @@ END;
 [[schema.enums]]
 name   = "invoice_status"
 values = ["draft", "issued", "cancelled"]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[permissions]] — permissões customizadas além das auto-inseridas read/create/update/delete
+# Inseridas em core.permissions com ON CONFLICT (resource, action) DO NOTHING
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[permissions]]
+resource    = "invoices"
+action      = "approve"
+description = "Permite aprovar notas fiscais para pagamento"    # opcional
+
+[[permissions]]
+resource    = "invoices"
+action      = "cancel"
+description = "Permite cancelar uma nota fiscal emitida"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[event_types]] — registro de tipos de evento
+# Inseridos em core.event_types com ON CONFLICT (slug) DO NOTHING
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[event_types]]
+slug           = "fiscal.nfe.issued"
+name           = "NF-e Emitida"
+description    = "Emitido quando uma NF-e é emitida com sucesso"     # opcional
+# payload_schema é opcional — JSON Schema descrevendo o payload do evento
+payload_schema = { "type" = "object", "properties" = { "nfe_id" = { "type" = "string" } } }
+
+[[event_types]]
+slug        = "fiscal.nfe.cancelled"
+name        = "NF-e Cancelada"
+description = "Emitido quando uma NF-e é cancelada"
 ```
 
 ---
@@ -222,7 +263,7 @@ Os nomes das colunas são automaticamente prefixados com `mod_{module_slug}_`. *
 | Alterar tipo de coluna | **Não** |
 | Remover índice / constraint | **Não** |
 
-Para operações destrutivas, use uma migration SQL em `migrations/`.
+Operações destrutivas não são suportadas para módulos externos. Se uma alteração destrutiva for necessária, o módulo deve ser desinstalado e reinstalado com o schema atualizado.
 
 ---
 
@@ -249,6 +290,7 @@ Após o DDL, o Core registra os objetos de schema na camada meta automaticamente
 | `meta.entity_definitions` | `slug`, `table_ref = mod_{slug}.{name}`, `label`, `is_system = false`, `is_custom = false` |
 | `meta.entity_tab_definitions` | Aba padrão `general` |
 | `meta.field_definitions` | Uma linha por coluna não-primária |
+| `core.permissions` | `read`, `create`, `update`, `delete` para o slug da entidade (ON CONFLICT DO NOTHING) |
 
 `field_type` é derivado automaticamente do tipo da coluna:
 
@@ -288,8 +330,46 @@ GET  /api/read/{table_name}/{id}
 | `module.schema_toml` | 422 | `schema.toml` não é UTF-8 válido ou TOML inválido |
 | `module.schema_validation` | 422 | Identificador falha no regex, tipo não está na lista de permissão, `$$` no corpo, timing/eventos de trigger inválidos, alvo de extend não está na lista |
 | `module.schema_ddl_failed` | 500 | Falha na execução do DDL; `message` contém a instrução e o erro do PG |
+| `module.invalid_manifest` | 422 | ZIP contém uma lista `migrations.files` não vazia (migrations SQL brutas não são permitidas em ZIPs externos) |
 
 Erros de validação incluem um caminho `field` (ex.: `tables[0].columns[1].name`) para identificar o problema.
+
+---
+
+## Pasta seeds/ — dados INSERT-only
+
+Coloque arquivos `.toml` ou `.json` em `seeds/` para inserir dados de referência durante a instalação.
+
+**Formato TOML:**
+```toml
+entity = "categories"   # slug da entidade (deve pertencer a este módulo)
+
+[[rows]]
+name = "Eletrônicos"
+code = "ELEC"
+
+[[rows]]
+name = "Móveis"
+code = "FURN"
+```
+
+**Formato JSON:**
+```json
+{
+  "entity": "categories",
+  "rows": [
+    { "name": "Eletrônicos", "code": "ELEC" },
+    { "name": "Móveis",      "code": "FURN" }
+  ]
+}
+```
+
+Regras:
+- Todas as linhas usam `ON CONFLICT DO NOTHING` — re-instalações são seguras.
+- A entidade deve ser declarada no `schema.toml` ou na pasta `entities/` do mesmo módulo.
+- Seeding entre módulos não é permitido; o instalador rejeita seeds direcionados a tabelas de outro módulo.
+- A lista de colunas é derivada da primeira linha; todas as linhas devem ter as mesmas chaves.
+- Para lógica de seed condicional ou complexa (`INSERT ... WHERE NOT EXISTS`, joins), use `start()` via host functions.
 
 ---
 

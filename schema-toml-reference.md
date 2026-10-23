@@ -9,19 +9,21 @@ module author.
 
 ## Why schema.toml vs SQL migrations
 
-| Concern | SQL migrations | `schema.toml` |
-|---|---|---|
-| Requires writing DDL | Yes | No |
-| Meta row registration | Manual | Automatic |
-| Idempotent re-apply | Tracked by `schema_migrations` | Tracked by SHA-256 hash (`schema_state`) |
-| Update delta | Full migration per change | Diff-generated — only new objects |
-| Triggers / functions | Full DDL | Inline body or function reference |
-| Destructive operations | Opt-in via `migrations.destructive` | Not supported (additive-only) |
-| Complex logic / data backfills | Best fit | Use SQL migration instead |
+| Concern | `schema.toml` |
+|---|---|
+| Requires writing DDL | No — declarative |
+| Meta row registration | Automatic |
+| Permission seeding | Automatic (read/create/update/delete per entity) |
+| Event type registration | Declarative via `[[event_types]]` |
+| Idempotent re-apply | Tracked by SHA-256 hash (`schema_state`) |
+| Update delta | Diff-generated — only new objects applied |
+| Triggers / functions | Inline body or function reference |
+| Destructive operations | Not supported (additive-only) |
+| Complex logic / data backfills | Use `seeds/` folder or `start()` host functions |
 
-Use `schema.toml` for everything a new module needs on day one. Add SQL migrations for destructive
-changes (renames, type changes, drops) or data backfills. Both can coexist in the same ZIP — Core
-applies SQL migrations first, then `schema.toml`.
+External module ZIPs **may not** include a `migrations/` folder with SQL files.
+Use `schema.toml`, `entities/`, and `seeds/` instead. The core dev migration
+system (files in `migrations/postgres/*.sql`) is separate and unaffected.
 
 ---
 
@@ -29,13 +31,18 @@ applies SQL migrations first, then `schema.toml`.
 
 ```
 module.zip
-├── module.toml          (required)
-├── module.wasm          (optional — omit for wasm = false modules)
-├── migrations/          (optional)
-│   └── 0001_init.sql
-├── pages/               (optional)
-└── schema.toml          (optional — this document)
+├── module.toml              (required)
+├── module.wasm              (optional — omit for wasm = false modules)
+├── pages/                   (optional)
+├── entities/                (optional — one .toml per entity)
+│   └── products.toml
+├── seeds/                   (optional — INSERT-only data)
+│   └── categories.toml
+└── schema.toml              (optional — this document)
 ```
+
+> **Note:** `migrations/` is not allowed in external module ZIPs. Any ZIP with a
+> non-empty `migrations.files` list will be rejected with a `422` error.
 
 ---
 
@@ -160,6 +167,38 @@ END;
 [[schema.enums]]
 name   = "invoice_status"
 values = ["draft", "issued", "cancelled"]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[permissions]] — custom permissions beyond the auto-seeded read/create/update/delete
+# Inserted into core.permissions with ON CONFLICT (resource, action) DO NOTHING
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[permissions]]
+resource    = "invoices"
+action      = "approve"
+description = "Allows approving invoices for payment"    # optional
+
+[[permissions]]
+resource    = "invoices"
+action      = "cancel"
+description = "Allows cancelling an issued invoice"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[event_types]] — event type registration
+# Inserted into core.event_types with ON CONFLICT (slug) DO NOTHING
+# ──────────────────────────────────────────────────────────────────────────────
+
+[[event_types]]
+slug           = "fiscal.nfe.issued"
+name           = "NF-e Issued"
+description    = "Emitted when a NF-e is successfully issued"     # optional
+# payload_schema is optional JSON Schema describing the event payload
+payload_schema = { "type" = "object", "properties" = { "nfe_id" = { "type" = "string" } } }
+
+[[event_types]]
+slug        = "fiscal.nfe.cancelled"
+name        = "NF-e Cancelled"
+description = "Emitted when a NF-e is cancelled"
 ```
 
 ---
@@ -227,7 +266,7 @@ Column names are automatically prefixed `mod_{module_slug}_`. **Do not include t
 | Change column type | **No** |
 | Drop index / constraint | **No** |
 
-For destructive operations use a SQL migration in `migrations/`.
+Destructive operations are not supported for external modules. If a destructive change is required, the module must be uninstalled and reinstalled with the updated schema.
 
 ---
 
@@ -254,6 +293,7 @@ After DDL, Core registers schema objects in the meta layer automatically:
 | `meta.entity_definitions` | `slug`, `table_ref = mod_{slug}.{name}`, `label`, `is_system = false`, `is_custom = false` |
 | `meta.entity_tab_definitions` | Default `general` tab |
 | `meta.field_definitions` | One row per non-primary column |
+| `core.permissions` | `read`, `create`, `update`, `delete` for the entity slug (ON CONFLICT DO NOTHING) |
 
 `field_type` is auto-derived from the column type:
 
@@ -293,8 +333,46 @@ GET  /api/read/{table_name}/{id}
 | `module.schema_toml` | 422 | `schema.toml` is not valid UTF-8 or not valid TOML |
 | `module.schema_validation` | 422 | Identifier fails regex, type not in allowlist, `$$` in body, invalid trigger timing/events, extend target not whitelisted |
 | `module.schema_ddl_failed` | 500 | DDL execution failed; `message` contains the statement and the PG error |
+| `module.invalid_manifest` | 422 | ZIP contains a non-empty `migrations.files` list (raw SQL migrations not allowed in external ZIPs) |
 
 Validation errors include a `field` path (e.g. `tables[0].columns[1].name`) to pinpoint the problem.
+
+---
+
+## seeds/ folder — INSERT-only data
+
+Place `.toml` or `.json` files in `seeds/` to insert reference data during install.
+
+**TOML format:**
+```toml
+entity = "categories"   # entity slug (must be owned by this module)
+
+[[rows]]
+name = "Electronics"
+code = "ELEC"
+
+[[rows]]
+name = "Furniture"
+code = "FURN"
+```
+
+**JSON format:**
+```json
+{
+  "entity": "categories",
+  "rows": [
+    { "name": "Electronics", "code": "ELEC" },
+    { "name": "Furniture",   "code": "FURN" }
+  ]
+}
+```
+
+Rules:
+- All rows use `ON CONFLICT DO NOTHING` — re-installs are safe.
+- The entity must be declared in the same module's `schema.toml` or `entities/` folder.
+- Cross-module seeding is not allowed; the installer rejects seeds targeting another module's tables.
+- Column list is derived from the first row; all rows must have the same keys.
+- For conditional or complex seed logic (`INSERT ... WHERE NOT EXISTS`, joins), use `start()` via host functions instead.
 
 ---
 

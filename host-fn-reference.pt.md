@@ -212,7 +212,7 @@ Emite um evento no sistema (gravado na outbox → NATS → SSE propaga para assi
 }
 ```
 
-`event_type` deve corresponder a um slug registrado em `meta.event_types`. O evento também aciona quaisquer event handlers WASM registrados via `register-event-handler`.
+`event_type` deve corresponder a um slug registrado em `core.event_types`. O evento também aciona quaisquer event handlers WASM registrados via `register-event-handler`.
 
 **Saída:**
 ```json
