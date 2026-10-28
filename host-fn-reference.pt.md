@@ -709,3 +709,202 @@ Resultados ordenados por score decrescente (mais similar primeiro).
 | `storage-delete` | `media_id*` | `storage:write` | `{success}` |
 | `vector-upsert` | `collection*`, `id*`, `embedding*`, `metadata` | `vector:write` | `{success}` |
 | `vector-search` | `collection*`, `query_embedding*`, `top_k` | `vector:read` | `{success, data[]}` |
+
+---
+
+## interface module-host
+
+Funções em `erp-core:component/module-host@0.1.0`. Chamadas em `start()` durante a inicialização do módulo — **não** durante execução de rotinas ou endpoints.
+
+Todas as sete funções:
+- Retornam `{ "ok": true }` em sucesso ou `{ "error": "..." }` em falha
+- Exigem contexto de módulo (`module_id` presente); retornam `"no module context"` se chamadas fora de `start()`
+
+---
+
+### `register-endpoint`
+
+Registra dinamicamente uma rota HTTP vinculada a uma rotina WASM. Mesmo efeito que `[[endpoints]]` no `module.toml`, mas feito em tempo de execução via `start()`. A rota fica ativa imediatamente — sem necessidade de reinicialização.
+
+**Entrada:**
+```json
+{
+  "path":          "/items",
+  "method":        "POST",
+  "routine_name":  "create_item",
+  "auth_required": true
+}
+```
+
+`auth_required` assume `true` se omitido. `path` + `method` deve ser único para este módulo.
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-event-handler`
+
+Registra uma rotina WASM para disparar quando um tipo de evento específico for emitido. `event_slug` deve existir previamente em `core.event_types`. Quando o evento ocorrer, o Core chama `call-event(routine_name, trigger, entity, data)`.
+
+**Entrada:**
+```json
+{
+  "event_slug":   "stock.product.updated",
+  "routine_name": "on_product_updated"
+}
+```
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-mcp-tool`
+
+Registra uma rotina WASM como ferramenta MCP (Model Context Protocol), tornando-a chamável por modelos de IA. A ferramenta aparece em `tools/list` como `module__{slug}__{name}`.
+
+**Entrada:**
+```json
+{
+  "name":         "search_products",
+  "description":  "Busca o catálogo de produtos por palavra-chave",
+  "input_schema": {
+    "type": "object",
+    "properties": { "q": { "type": "string" } },
+    "required": ["q"]
+  },
+  "routine_name": "search_products_routine"
+}
+```
+
+`input_schema` assume `{}` (qualquer entrada aceita) se omitido. `name` e `routine_name` são obrigatórios.
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-partner-type`
+
+Registra uma classificação de tipo de parceiro (ex.: `"supplier"`, `"carrier"`). Estende a taxonomia de classificação de parceiros do sistema. Não exige contexto de módulo — pode ser chamada de qualquer contexto WASM.
+
+**Entrada:**
+```json
+{ "partner_type": "supplier" }
+```
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-entity-field`
+
+Adiciona um campo à definição SchemaForm de uma entidade existente. **Não altera a tabela no banco de dados** — a coluna já deve existir (declarada via `schema.toml` ou `entities/`).
+
+**Entrada:**
+```json
+{
+  "entity_slug":    "mod_stock.products",
+  "field_slug":     "supplier_id",
+  "label":          "Fornecedor",
+  "field_type":     "select",
+  "required":       false,
+  "tab_key":        "general",
+  "tab_label":      "Geral",
+  "position":       5,
+  "fk_entity_slug": "mod_suppliers.suppliers"
+}
+```
+
+| Campo | Obrigatório | Notas |
+|-------|-------------|-------|
+| `entity_slug` | ✅ | Entidade alvo no formato `schema.tabela` |
+| `field_slug` | ✅ | Nome da coluna na tabela da entidade |
+| `label` | ✅ | Rótulo legível exibido na interface |
+| `field_type` | ✅ | `text`, `integer`, `boolean`, `date`, `datetime`, `decimal`, `select`, `json` |
+| `required` | ❌ | Validação de obrigatório no cliente. Padrão: `false` |
+| `tab_key` | ❌ | Chave da aba do `[form]` da entidade |
+| `tab_label` | ❌ | Rótulo da aba (usado apenas se `tab_key` for novo) |
+| `position` | ❌ | Ordem dentro da aba. Padrão: `0` |
+| `fk_entity_slug` | ❌ | Entidade de lookup FK para campos `select` |
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `create-document-type-group`
+
+Cria um grupo de tipos de documento — um container que organiza tipos de documento. Idempotente se o slug já existir com o mesmo módulo proprietário.
+
+**Entrada:**
+```json
+{
+  "slug":     "fiscal",
+  "label":    "Fiscal",
+  "position": 0
+}
+```
+
+`position` assume `0` se omitido.
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `create-document-type`
+
+Cria um tipo de documento dentro de um grupo existente. `group_slug` deve ter sido criado antes em `start()` via `create-document-type-group`, ou já existir no banco de dados.
+
+**Entrada:**
+```json
+{
+  "slug":       "nfe",
+  "label":      "NF-e",
+  "group_slug": "fiscal",
+  "position":   0
+}
+```
+
+`position` assume `0` se omitido.
+
+**Saída:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+## Referência Rápida — module-host
+
+| Função | Campos de entrada (obrigatórios*) | Contexto | Saída |
+|--------|----------------------------------|----------|-------|
+| `register-endpoint` | `path*`, `method*`, `routine_name*`, `auth_required` | módulo | `{ok}` |
+| `register-event-handler` | `event_slug*`, `routine_name*` | módulo | `{ok}` |
+| `register-mcp-tool` | `name*`, `description*`, `routine_name*`, `input_schema` | módulo | `{ok}` |
+| `register-partner-type` | `partner_type*` | qualquer | `{ok}` |
+| `register-entity-field` | `entity_slug*`, `field_slug*`, `label*`, `field_type*`, `required`, `tab_key`, `tab_label`, `position`, `fk_entity_slug` | módulo | `{ok}` |
+| `create-document-type-group` | `slug*`, `label*`, `position` | módulo | `{ok}` |
+| `create-document-type` | `slug*`, `label*`, `group_slug*`, `position` | módulo | `{ok}` |

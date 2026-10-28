@@ -709,3 +709,202 @@ Results are ordered by score descending (most similar first).
 | `storage-delete`    | `media_id*`                                            | `storage:write`     | `{success}`  |
 | `vector-upsert`     | `collection*`, `id*`, `embedding*`, `metadata`         | `vector:write`      | `{success}`  |
 | `vector-search`     | `collection*`, `query_embedding*`, `top_k`             | `vector:read`       | `{success, data[]}` |
+
+---
+
+## interface module-host
+
+Functions in `erp-core:component/module-host@0.1.0`. Called from `start()` during module initialization — **not** during routine or endpoint execution.
+
+All seven functions:
+- Return `{ "ok": true }` on success or `{ "error": "..." }` on failure
+- Require a module context (`module_id` present); return `"no module context"` if called outside `start()`
+
+---
+
+### `register-endpoint`
+
+Dynamically registers an HTTP route backed by a WASM routine. Same effect as `[[endpoints]]` in `module.toml`, but done at runtime from `start()`. Route is live immediately — no restart needed.
+
+**Input:**
+```json
+{
+  "path":          "/items",
+  "method":        "POST",
+  "routine_name":  "create_item",
+  "auth_required": true
+}
+```
+
+`auth_required` defaults to `true` if omitted. `path` + `method` must be unique for this module.
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-event-handler`
+
+Subscribes a WASM routine to fire when a specific event type is emitted. `event_slug` must already exist in `core.event_types`. When the event fires, Core calls `call-event(routine_name, trigger, entity, data)`.
+
+**Input:**
+```json
+{
+  "event_slug":   "stock.product.updated",
+  "routine_name": "on_product_updated"
+}
+```
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-mcp-tool`
+
+Registers a WASM routine as an MCP (Model Context Protocol) tool, making it callable by AI models. The tool appears in `tools/list` as `module__{slug}__{name}`.
+
+**Input:**
+```json
+{
+  "name":         "search_products",
+  "description":  "Search the product catalog by keyword",
+  "input_schema": {
+    "type": "object",
+    "properties": { "q": { "type": "string" } },
+    "required": ["q"]
+  },
+  "routine_name": "search_products_routine"
+}
+```
+
+`input_schema` defaults to `{}` (any input accepted) if omitted. Both `name` and `routine_name` are required.
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-partner-type`
+
+Registers a partner type classification string (e.g., `"supplier"`, `"carrier"`). Extends the system's partner classification taxonomy. Does not require a module context — can be called from any WASM context.
+
+**Input:**
+```json
+{ "partner_type": "supplier" }
+```
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `register-entity-field`
+
+Adds a field to an existing entity's SchemaForm definition. Does **not** alter the database table — the column must already exist (declared via `schema.toml` or `entities/`).
+
+**Input:**
+```json
+{
+  "entity_slug":    "mod_stock.products",
+  "field_slug":     "supplier_id",
+  "label":          "Supplier",
+  "field_type":     "select",
+  "required":       false,
+  "tab_key":        "general",
+  "tab_label":      "General",
+  "position":       5,
+  "fk_entity_slug": "mod_suppliers.suppliers"
+}
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `entity_slug` | ✅ | Target entity in `schema.table` format |
+| `field_slug` | ✅ | Column name in the entity's table |
+| `label` | ✅ | Human-readable label for the UI |
+| `field_type` | ✅ | `text`, `integer`, `boolean`, `date`, `datetime`, `decimal`, `select`, `json` |
+| `required` | ❌ | Client-side required validation. Default: `false` |
+| `tab_key` | ❌ | Tab key from the entity's `[form]` tabs |
+| `tab_label` | ❌ | Tab label (only used if `tab_key` is new) |
+| `position` | ❌ | Sort order within the tab. Default: `0` |
+| `fk_entity_slug` | ❌ | FK lookup entity for `select` fields |
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `create-document-type-group`
+
+Creates a document type group — a container that organizes document types. Idempotent if the slug already exists with the same module owner.
+
+**Input:**
+```json
+{
+  "slug":     "fiscal",
+  "label":    "Fiscal",
+  "position": 0
+}
+```
+
+`position` defaults to `0` if omitted.
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+### `create-document-type`
+
+Creates a document type inside an existing group. `group_slug` must have been created earlier in `start()` via `create-document-type-group`, or already exist in the database.
+
+**Input:**
+```json
+{
+  "slug":       "nfe",
+  "label":      "NF-e",
+  "group_slug": "fiscal",
+  "position":   0
+}
+```
+
+`position` defaults to `0` if omitted.
+
+**Output:**
+```json
+{ "ok": true }
+{ "error": "..." }
+```
+
+---
+
+## module-host Quick Reference
+
+| Function | Input fields (required*) | Context | Output |
+|----------|--------------------------|---------|--------|
+| `register-endpoint` | `path*`, `method*`, `routine_name*`, `auth_required` | module | `{ok}` |
+| `register-event-handler` | `event_slug*`, `routine_name*` | module | `{ok}` |
+| `register-mcp-tool` | `name*`, `description*`, `routine_name*`, `input_schema` | module | `{ok}` |
+| `register-partner-type` | `partner_type*` | any | `{ok}` |
+| `register-entity-field` | `entity_slug*`, `field_slug*`, `label*`, `field_type*`, `required`, `tab_key`, `tab_label`, `position`, `fk_entity_slug` | module | `{ok}` |
+| `create-document-type-group` | `slug*`, `label*`, `position` | module | `{ok}` |
+| `create-document-type` | `slug*`, `label*`, `group_slug*`, `position` | module | `{ok}` |
