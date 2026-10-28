@@ -24,8 +24,7 @@ module-zip/
 ├── entities/
 │   ├── categories.toml   ← [table] only
 │   └── items.toml        ← [table] + [form]
-├── migrations/           ← optional; runs before entities/
-└── schema.toml           ← optional; runs before entities/
+└── schema.toml           ← optional; applied before entities/
 ```
 
 ---
@@ -342,15 +341,14 @@ FK columns get `fk_entity_slug` set on their `field_definitions` row, which the 
 
 ---
 
-## Interaction with `schema.toml` and `migrations/`
+## Interaction with `schema.toml`
 
 Core applies these in order:
 
-1. `migrations/` SQL files (in the order declared in `module.toml`)
-2. `schema.toml` (declarative DDL engine)
-3. `entities/` files (DDL + meta registration)
+1. `schema.toml` (declarative DDL engine)
+2. `entities/` files (DDL + meta registration)
 
-`entities/` runs last, so migrations and schema.toml can set up prerequisites (extensions, seed data, referenced tables from other modules) before entities/ creates tables that depend on them.
+`entities/` runs after `schema.toml`, so schema.toml can declare prerequisites (extensions, referenced tables, enums) before entities/ creates tables that depend on them.
 
 ---
 

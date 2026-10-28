@@ -27,7 +27,7 @@ Templates WebAssembly Component Model para módulos ERP Core. Escolha linguagem 
 # Exemplo: módulo em Rust
 cd module/rust
 make build   # → module.wasm
-make zip     # → my-module.zip (contém module.toml + module.wasm + migrations/ + schema.toml)
+make zip     # → my-module.zip (contém module.toml + module.wasm + schema.toml + pages/)
 ```
 
 Faça upload de `my-module.zip` para o ERP Core via `/api/modules/install`.
@@ -64,7 +64,7 @@ min_core = "01.000.000"
 wasm     = false
 ```
 
-Use `schema.toml` junto com módulos SQL-only para declarar tabelas, estender tabelas do core e registrar entidades automaticamente, sem escrever migrations manuais. Veja [`schema-toml-reference.md`](schema-toml-reference.md).
+Use `schema.toml` junto com módulos SQL-only para declarar tabelas, estender tabelas do core e registrar entidades automaticamente, sem escrever migrations manuais. Veja [`schema-toml-reference.md`](schema-toml-reference.md). Para a referência completa de todas as seções do `module.toml` (rotinas, endpoints, event handlers, páginas, navegação, behaviors, tipos de documento, dependências e desinstalação), veja [`module-toml-reference.md`](module-toml-reference.md).
 
 ## Melhores Práticas
 
