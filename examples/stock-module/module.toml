@@ -5,20 +5,28 @@ version     = "01.000.000"
 min_core    = "01.000.000"
 description = "Inventory and stock level management"
 author      = "Your Name"
-wasm        = true
-
-[migrations]
-files = ["0001_create_tables.sql"]
 
 [[pages]]
-slug   = "stock-products"
-title  = "Products"
-layout = "default"
+slug  = "stock-products"
+title = "Products"
+
+[[nav.folders]]
+slug       = "stock"
+title      = "Stock"
+parent     = "core"
+sort_order = 10
+
+[[nav.items]]
+page       = "stock-products"
+folder     = "stock"
+sort_order = 0
 
 [[routines]]
 name         = "check_low_stock"
-routine_type = "query"
+description  = "Returns products below their stock threshold"
+routine_type = "function"
 
 [[routines]]
 name         = "restock_product"
-routine_type = "mutation"
+description  = "Increment stock quantity for a product"
+routine_type = "function"

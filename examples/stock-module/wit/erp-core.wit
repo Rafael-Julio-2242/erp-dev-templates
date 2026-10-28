@@ -22,12 +22,19 @@ interface host {
     storage-upload:       func(input: string) -> string;
     storage-get-url:      func(input: string) -> string;
     storage-delete:       func(input: string) -> string;
+    vector-upsert:        func(input: string) -> string;
+    vector-search:        func(input: string) -> string;
 }
 
 interface module-host {
-    log-mod:                  func(level: string, msg: string);
-    register-endpoint:        func(input: string) -> string;
-    register-event-handler:   func(input: string) -> string;
+    log-mod:                     func(level: string, msg: string);
+    register-endpoint:           func(input: string) -> string;
+    register-event-handler:      func(input: string) -> string;
+    register-mcp-tool:           func(input: string) -> string;
+    register-partner-type:       func(input: string) -> string;
+    register-entity-field:       func(input: string) -> string;
+    create-document-type-group:  func(input: string) -> string;
+    create-document-type:        func(input: string) -> string;
 }
 
 world module {

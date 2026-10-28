@@ -8,6 +8,7 @@
 
 mod bindings;
 use bindings::erp_core::component::host;
+use bindings::erp_core::component::module_host;
 
 struct Component;
 
@@ -19,22 +20,24 @@ impl bindings::Guest for Component {
         host::log("info", "[stock] module starting");
 
         // Register a custom HTTP endpoint.
-        // After registration, POST /api/module/stock/low-stock will invoke call_endpoint("low-stock", ...).
+        // After registration, GET /api/module/low-stock will invoke call_endpoint("low-stock", ...).
+        // routine_name must match the arm in call_endpoint below.
         let endpoint_reg = serde_json::json!({
-            "name":        "low-stock",
-            "method":      "GET",
-            "path":        "/low-stock",
-            "description": "Returns all products below their stock threshold"
+            "path":          "/low-stock",
+            "method":        "GET",
+            "routine_name":  "low-stock",
+            "auth_required": true
         });
-        host::register_endpoint(&endpoint_reg.to_string());
+        module_host::register_endpoint(&endpoint_reg.to_string());
 
         // Register an event handler for the "order.created" event.
-        // When that event fires, call_event("order.created", ...) will be invoked.
+        // event_slug must exist in core.event_types.
+        // routine_name must match the arm in call_event below.
         let event_reg = serde_json::json!({
-            "event_type":  "order.created",
-            "handler_name": "on_order_created"
+            "event_slug":   "order.created",
+            "routine_name": "on_order_created"
         });
-        host::register_event_handler(&event_reg.to_string());
+        module_host::register_event_handler(&event_reg.to_string());
 
         host::log("info", "[stock] module ready");
         r#"{"success":true,"data":null,"message":"ok"}"#.into()

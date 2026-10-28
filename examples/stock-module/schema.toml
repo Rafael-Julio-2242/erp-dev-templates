@@ -1,0 +1,85 @@
+[schema]
+version = "01.000.000"
+
+[[schema.tables]]
+name = "products"
+
+  [[schema.tables.columns]]
+  name    = "id"
+  type    = "uuid"
+  primary = true
+  default = "gen_random_uuid()"
+
+  [[schema.tables.columns]]
+  name     = "company_id"
+  type     = "uuid"
+  required = true
+
+  [[schema.tables.columns]]
+  name     = "name"
+  type     = "text"
+  required = true
+
+  [[schema.tables.columns]]
+  name     = "sku"
+  type     = "text"
+  required = true
+
+  [[schema.tables.columns]]
+  name    = "quantity"
+  type    = "integer"
+  default = "0"
+
+  [[schema.tables.columns]]
+  name    = "threshold"
+  type    = "integer"
+  default = "10"
+
+  [[schema.tables.columns]]
+  name     = "created_at"
+  type     = "timestamptz"
+  required = true
+  default  = "NOW()"
+
+  [[schema.tables.columns]]
+  name     = "updated_at"
+  type     = "timestamptz"
+  required = true
+  default  = "NOW()"
+
+[[schema.tables]]
+name = "stock_movements"
+
+  [[schema.tables.columns]]
+  name    = "id"
+  type    = "uuid"
+  primary = true
+  default = "gen_random_uuid()"
+
+  [[schema.tables.columns]]
+  name     = "company_id"
+  type     = "uuid"
+  required = true
+
+  [[schema.tables.columns]]
+  name      = "product_id"
+  type      = "uuid"
+  required  = true
+  fk_table  = "products"
+  fk_column = "id"
+  on_delete = "cascade"
+
+  [[schema.tables.columns]]
+  name     = "delta"
+  type     = "integer"
+  required = true
+
+  [[schema.tables.columns]]
+  name = "reason"
+  type = "text"
+
+  [[schema.tables.columns]]
+  name     = "created_at"
+  type     = "timestamptz"
+  required = true
+  default  = "NOW()"
