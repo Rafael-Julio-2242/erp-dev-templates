@@ -70,6 +70,14 @@ Use `schema.toml` junto com módulos SQL-only para declarar tabelas, estender ta
 
 Veja [`operation-driven-modules.md`](operation-driven-modules.md) para o padrão obrigatório ao construir módulos que afetam fluxos de negócio críticos (fiscal, estoque, precificação, impressão, conformidade). A regra central: qualquer configuração que possa diferir entre duas operações na mesma empresa deve ser armazenada por `operation_id`, nunca em uma tabela de configuração global.
 
+## Páginas HTML Personalizadas
+
+Módulos podem incluir páginas HTML personalizadas (declaradas em `[[pages]]` no `module.toml` com `kind = "html"`). Toda página desse tipo tem acesso ao `window.ERP`, um SDK JavaScript injetado automaticamente pelo shell. Ele oferece acesso autenticado a dados, rotinas, eventos, notificações e utilitários de UI, sem configuração extra.
+
+Veja [`erp-js-reference.pt.md`](erp-js-reference.pt.md) para a referência completa do SDK.
+
+Para o formato do array de filtros usado em `ERP.read()` e `ERP.loadSavedFilters()`, veja [`advanced-search.pt.md`](advanced-search.pt.md). Para o protocolo de diretivas retornado por rotinas executadas a partir de uma ação de página e processado por `ERP.parseDirective()`, veja [`page-action-directives.pt.md`](page-action-directives.pt.md).
+
 ## Pasta entities/
 
 A pasta opcional `entities/` (um `.toml` por entidade) é uma alternativa de alto nível ao `schema.toml` para módulos que querem tanto DDL quanto uma página SchemaForm gerada automaticamente por entidade. Arquivos com apenas `[table]` criam a tabela e registram as linhas de meta; arquivos com `[table]` + `[form]` também criam uma página SchemaForm na navegação.

@@ -72,6 +72,14 @@ See [`operation-driven-modules.md`](operation-driven-modules.md) for the require
 
 See [`event-emission-guide.md`](event-emission-guide.md) for the required pattern when any module mutates state. The core rule: every write and every delete must emit a domain event after it succeeds, following the `{module}.{entity}.{verb}` naming convention.
 
+## Custom HTML Pages
+
+Modules can ship custom HTML pages (listed under `[[pages]]` in `module.toml` with `kind = "html"`). Every such page has access to `window.ERP`, a JavaScript SDK injected automatically by the shell. It provides authenticated access to data, routines, events, notifications, and UI utilities without any extra configuration.
+
+See [`erp-js-reference.md`](erp-js-reference.md) for the full SDK reference.
+
+For the filter array format used in `ERP.read()` and `ERP.loadSavedFilters()`, see [`advanced-search.md`](advanced-search.md). For the directive protocol returned by routines executed from a page action and handled by `ERP.parseDirective()`, see [`page-action-directives.md`](page-action-directives.md).
+
 ## entities/ Folder
 
 The optional `entities/` folder (one `.toml` per entity) is a higher-level alternative to `schema.toml` for modules that want both DDL and an auto-generated SchemaForm UI page per entity. Files with only `[table]` create the table and register meta rows; files with `[table]` + `[form]` also create a SchemaForm page in the navigation.
