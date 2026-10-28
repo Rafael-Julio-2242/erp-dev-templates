@@ -10,4 +10,4 @@ build:
 	componentize-py -d ./wit -w $(WORLD) componentize app -o $(OUT)
 
 zip:
-	zip -r my-module.zip module.toml $(OUT) migrations/ pages/
+	zip -r my-module.zip module.toml $(OUT) schema.toml pages/

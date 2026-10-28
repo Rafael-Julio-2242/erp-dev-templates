@@ -8,4 +8,4 @@ build:
 	cp target/wasm32-wasip2/release/my_module.wasm module.wasm
 
 zip:
-	zip -r my-module.zip module.toml module.wasm migrations/ pages/
+	zip -r my-module.zip module.toml module.wasm schema.toml pages/

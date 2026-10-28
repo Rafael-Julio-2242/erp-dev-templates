@@ -1,0 +1,22 @@
+[schema]
+version = "01.000.000"
+
+[[schema.tables]]
+name = "items"
+
+  [[schema.tables.columns]]
+  name    = "id"
+  type    = "uuid"
+  primary = true
+  default = "gen_random_uuid()"
+
+  [[schema.tables.columns]]
+  name     = "name"
+  type     = "text"
+  required = true
+
+  [[schema.tables.columns]]
+  name     = "created_at"
+  type     = "timestamptz"
+  required = true
+  default  = "NOW()"

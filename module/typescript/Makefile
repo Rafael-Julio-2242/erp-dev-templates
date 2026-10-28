@@ -7,4 +7,4 @@ build:
 	npm run build
 
 zip:
-	zip -r my-module.zip module.toml module.wasm migrations/ pages/
+	zip -r my-module.zip module.toml module.wasm schema.toml pages/

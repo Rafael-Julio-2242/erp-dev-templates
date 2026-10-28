@@ -12,4 +12,4 @@ build: bindings
 	tinygo build -target=wasip2 -wit-package ./$(WIT_DIR) -wit-world $(WORLD) -o $(OUT) .
 
 zip:
-	zip -r my-module.zip module.toml $(OUT) migrations/ pages/
+	zip -r my-module.zip module.toml $(OUT) schema.toml pages/

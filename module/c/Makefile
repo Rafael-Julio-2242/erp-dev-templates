@@ -15,4 +15,4 @@ build: bindings
 	wasm-tools component new $(CORE) --adapt $(ADAPTER) -o $(OUT)
 
 zip:
-	zip -r my-module.zip module.toml $(OUT) migrations/ pages/
+	zip -r my-module.zip module.toml $(OUT) schema.toml pages/
