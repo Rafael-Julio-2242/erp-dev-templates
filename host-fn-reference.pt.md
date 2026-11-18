@@ -925,6 +925,94 @@ Exclui uma permissão com escopo de módulo e faz cascade para todas as concess�
 
 ---
 
+## Notificações
+
+### `send-notification`
+Insere uma notificação em `core.notifications` para um usuário específico ou para todos os membros de um papel. Não exige permissão interna — o módulo chamador já deve ter a concessão adequada.
+
+**Entrada:**
+```json
+{
+  "target_user_id":   "uuid (mutuamente exclusivo com target_role_slug)",
+  "target_role_slug": "string (mutuamente exclusivo com target_user_id)",
+  "kind":             "info | warning | error | success  (padrão: info)",
+  "title":            "string (obrigatório)",
+  "body":             "string | null",
+  "data":             "object | null"
+}
+```
+
+Exatamente um entre `target_user_id` e `target_role_slug` deve ser informado.
+
+**Saída:** `{ "success": true, "data": { "count": 3 } }` — `count` é o número de linhas inseridas.
+
+**Erros:** `{ "success": false, "message": "target_user_id or target_role_slug is required" }` / `"only one of target_user_id or target_role_slug may be set"` / `"title is required"`
+
+---
+
+## Ponte MCP
+
+Essas duas host fns expõem a mesma tabela de dispatch MCP disponível em `POST /mcp` ao contexto de execução WASM, permitindo que um módulo chame ferramentas MCP de outro módulo sem round-trip HTTP.
+
+### `mcp-list-tools`
+Retorna todas as ferramentas MCP que o chamador tem permissão para executar.
+
+**Entrada:** *(nenhuma)*
+
+**Saída:**
+```json
+{
+  "success": true,
+  "data": [
+    { "name": "entity__list" },
+    { "name": "entity__read" },
+    { "name": "entity__write" },
+    { "name": "entity__delete" },
+    { "name": "entity__describe" },
+    { "name": "entity__list_schemas" },
+    { "name": "routine__execute" },
+    { "name": "custom__minha_ferramenta", "description": "...", "input_schema": {} },
+    { "name": "module__outro_slug__ferramenta", "description": "...", "input_schema": {} }
+  ],
+  "message": ""
+}
+```
+
+**Filtragem por permissão:**
+- Ferramentas de entidade e rotina sempre são incluídas.
+- Ferramentas customizadas requerem `mcp_tool:{nome}` ou `mcp_tool:all`.
+- Ferramentas de módulo requerem `{module_slug}_mcp:{nome}` ou `{module_slug}_mcp:all`.
+
+---
+
+### `mcp-call-tool`
+Despacha uma única chamada de ferramenta MCP e retorna o resultado.
+
+**Entrada:**
+```json
+{ "name": "module__outro_slug__ferramenta", "arguments": { "chave": "valor" } }
+```
+
+**Prefixos de nome:**
+
+| Prefixo | Exemplo | Dispatch |
+|---|---|---|
+| `custom__` | `custom__minha_ferramenta` | Consulta `core.mcp_tools`, executa a rotina vinculada |
+| `module__` | `module__billing__create_invoice` | Busca artefato do módulo, chama rotina definida em `sys.mcp_tool_definitions` |
+
+**Saída:** `{ "success": true, "data": { ... } }` — `data` é o valor de retorno da rotina.
+
+**Verificação de permissão:**
+- `custom__foo` → requer `mcp_tool:foo` ou `mcp_tool:all`.
+- `module__slug__bar` → requer `{slug}_mcp:bar` ou `{slug}_mcp:all`.
+- Retorna `{ "success": false, "message": "forbidden" }` em falha de RBAC.
+
+**Guarda de profundidade:** retorna `{ "success": false, "message": "max recursion depth exceeded" }` se a profundidade de execução atingir 32.
+
+> Ferramentas `entity__*` são listadas por `mcp-list-tools` mas **não** são despachadas por `mcp-call-tool`. Use as host fns `read-entity`, `list-entities`, `write-entity`, `delete-entity` diretamente.
+
+---
+
 ## Tabela de Referência Rápida
 
 | Função | Campos de entrada (obrigatórios*) | Permissão | Envelope |
@@ -970,6 +1058,9 @@ Exclui uma permissão com escopo de módulo e faz cascade para todas as concess�
 | `job-log` | `level*`, `message*` | ctx job | `{ok}` |
 | `create-permission` | `resource*`, `action*`, `description` | ctx módulo | `{id, resource, action}` |
 | `delete-permission` | `resource*`, `action*` | ctx módulo | `{deleted, cascade_count}` |
+| `send-notification` | `title*`, `target_user_id` ou `target_role_slug` (um obrigatório), `kind`, `body`, `data` | nenhuma | `{success, data.count}` |
+| `mcp-list-tools`    | *(nenhuma)*                                   | filtrado por RBAC | `{success, data[]}` |
+| `mcp-call-tool`     | `name*`, `arguments`                          | `mcp_tool:{nome}` ou `{slug}_mcp:{nome}` | `{success, data}` |
 
 ---
 

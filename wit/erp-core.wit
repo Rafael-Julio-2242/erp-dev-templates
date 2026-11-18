@@ -42,6 +42,9 @@ interface host {
     job-log:                     func(input: string) -> string;
     create-permission:           func(input: string) -> string;
     delete-permission:           func(input: string) -> string;
+    send-notification:           func(input: string) -> string;
+    mcp-list-tools:              func() -> string;
+    mcp-call-tool:               func(input: string) -> string;
 }
 
 interface module-host {

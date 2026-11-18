@@ -947,6 +947,94 @@ Deletes a module-scoped permission and cascades to all grants. Rejects system pe
 
 ---
 
+## Notifications
+
+### `send-notification`
+Writes one notification row to `core.notifications` for a specific user or every member of a role. No RBAC check inside the host fn — the calling module is assumed to already have the appropriate grant.
+
+**Input:**
+```json
+{
+  "target_user_id":   "uuid (mutually exclusive with target_role_slug)",
+  "target_role_slug": "string (mutually exclusive with target_user_id)",
+  "kind":             "info | warning | error | success  (default: info)",
+  "title":            "string (required)",
+  "body":             "string | null",
+  "data":             "object | null"
+}
+```
+
+Exactly one of `target_user_id` or `target_role_slug` must be set; supplying both or neither returns an error.
+
+**Output:** `{ "success": true, "data": { "count": 3 } }` — `count` is number of rows inserted (1 for user path, N for role path).
+
+**Errors:** `{ "success": false, "message": "target_user_id or target_role_slug is required" }` / `"only one of target_user_id or target_role_slug may be set"` / `"title is required"`
+
+---
+
+## MCP Tool Bridge
+
+These two host fns expose the same MCP dispatch table available at `POST /mcp` to the WASM execution context, letting one module call another module's MCP tools (or custom tools) without an HTTP round-trip.
+
+### `mcp-list-tools`
+Returns all MCP tools the current caller has permission to call.
+
+**Input:** *(none)*
+
+**Output:**
+```json
+{
+  "success": true,
+  "data": [
+    { "name": "entity__list" },
+    { "name": "entity__read" },
+    { "name": "entity__write" },
+    { "name": "entity__delete" },
+    { "name": "entity__describe" },
+    { "name": "entity__list_schemas" },
+    { "name": "routine__execute" },
+    { "name": "custom__my_tool", "description": "...", "input_schema": {} },
+    { "name": "module__other_slug__tool_name", "description": "...", "input_schema": {} }
+  ],
+  "message": ""
+}
+```
+
+**Permission filtering:**
+- Entity and routine tools are always included.
+- Custom tools require `mcp_tool:{tool_name}` or `mcp_tool:all`.
+- Module tools require `{module_slug}_mcp:{tool_name}` or `{module_slug}_mcp:all`.
+
+---
+
+### `mcp-call-tool`
+Dispatches a single MCP tool call and returns its result.
+
+**Input:**
+```json
+{ "name": "module__other_slug__some_tool", "arguments": { "key": "value" } }
+```
+
+**Tool name prefixes:**
+
+| Prefix | Example | Dispatch |
+|---|---|---|
+| `custom__` | `custom__my_tool` | Looks up `core.mcp_tools`, executes its linked routine |
+| `module__` | `module__billing__create_invoice` | Fetches module artifact, calls the routine defined in `sys.mcp_tool_definitions` |
+
+**Output:** `{ "success": true, "data": { ... } }` — `data` is the routine's return value.
+
+**Permission enforcement:**
+- `custom__foo` → requires `mcp_tool:foo` or `mcp_tool:all`.
+- `module__slug__bar` → requires `{slug}_mcp:bar` or `{slug}_mcp:all`.
+- Returns `{ "success": false, "message": "forbidden" }` on RBAC failure (no exception, safe to ignore in workflows).
+
+**Depth guard:** returns `{ "success": false, "message": "max recursion depth exceeded" }` if the execution depth reaches 32. This prevents infinite mutual recursion between modules.
+
+> `entity__*` tools are listed by `mcp-list-tools` but are **not** dispatched by `mcp-call-tool`. Use the dedicated `read-entity`, `list-entities`, `write-entity`, `delete-entity` host fns instead.
+
+---
+
 ## Quick Reference Table
 
 | Function            | Input fields (required*)                               | Permission          | Envelope     |
@@ -992,6 +1080,9 @@ Deletes a module-scoped permission and cascades to all grants. Rejects system pe
 | `job-log`           | `level*`, `message*`                                   | job ctx             | `{ok}`       |
 | `create-permission` | `resource*`, `action*`, `description`                  | module ctx          | `{id, resource, action}` |
 | `delete-permission` | `resource*`, `action*`                                 | module ctx          | `{deleted, cascade_count}` |
+| `send-notification` | `title*`, `target_user_id` or `target_role_slug` (one required), `kind`, `body`, `data` | none | `{success, data.count}` |
+| `mcp-list-tools`    | *(none)*                                               | filtered by RBAC    | `{success, data[]}` |
+| `mcp-call-tool`     | `name*`, `arguments`                                   | `mcp_tool:{name}` or `{slug}_mcp:{name}` | `{success, data}` |
 
 ---
 
