@@ -1169,3 +1169,73 @@ Cria um tipo de documento dentro de um grupo existente. `group_slug` deve ter si
 | `register-entity-field` | `entity_slug*`, `field_slug*`, `label*`, `field_type*`, `required`, `tab_key`, `tab_label`, `position`, `fk_entity_slug` | módulo | `{ok}` |
 | `create-document-type-group` | `slug*`, `label*`, `position` | módulo | `{ok}` |
 | `create-document-type` | `slug*`, `label*`, `group_slug*`, `position` | módulo | `{ok}` |
+
+---
+
+## Padrões
+
+### Validar-Antes-de-Escrever (Dry-Run)
+
+As host functions WASM não possuem rollback explícito. Cada chamada a `write-entity` ou `execute` confirma imediatamente. Para implementar um preflight ou dry-run, realize todas as validações primeiro — antes de qualquer chamada mutante — e prossiga somente se todas passarem.
+
+```rust
+// 1. Validar: checar existência, regras de negócio, quota, etc.
+let existing = serde_json::from_str::<serde_json::Value>(
+    &host::read_entity(r#"{"entity":"core.products","id":"..."}"#)
+).unwrap();
+if existing["success"] != true {
+    return Err("product not found".into());
+}
+
+// 2. Somente após todas as validações, mutar.
+host::write_entity(r#"{"entity":"core.products","schema_version":1,"data":{...}}"#);
+```
+
+Para operações multi-etapa custosas, estruture como: validar-tudo → mutar-tudo. Qualquer erro retornado antes da primeira chamada a `write-entity` ou `execute` não deixa efeitos colaterais.
+
+---
+
+### Escrita Atômica em Múltiplas Linhas
+
+Múltiplas chamadas sequenciais a `write-entity` **não são atômicas** — se a terceira falhar, as duas primeiras já foram confirmadas. Para atomicidade real entre várias linhas, use uma única chamada a `execute` com CTE:
+
+```rust
+let sql = r#"
+    WITH ins_a AS (
+        INSERT INTO mod_meumodulo.pedidos (id, cliente_id)
+        VALUES (gen_random_uuid(), $1)
+        RETURNING id
+    )
+    INSERT INTO mod_meumodulo.itens_pedido (pedido_id, produto_id, qty)
+    SELECT ins_a.id, $2, $3 FROM ins_a
+"#;
+let params = serde_json::json!(["cliente-uuid", "produto-uuid", 2]).to_string();
+let result = host::execute(&serde_json::json!({"sql": sql, "params": params}).to_string());
+// Ambas as linhas são inseridas ou nenhuma.
+```
+
+Restrição: `execute` só pode escrever em tabelas do próprio schema do módulo (`mod_{slug}`) ou em schemas com permissão explícita. Não aciona o log de auditoria nem o outbox de eventos do Core — use `write-entity` para entidades Core.
+
+---
+
+### Testando Fronteiras de Segurança
+
+O runtime das host fns aplica regras de segurança que o código WASM não pode contornar. Em testes de integração, verifique explicitamente os caminhos de rejeição:
+
+**Principal system não pode definir `on_behalf_of`**
+
+```bash
+# Despache um job que chama set-audit-context com on_behalf_of definido.
+# O worker executa o job como principal system (user_id nulo).
+# Esperado: { "ok": false, "error": "system principal cannot set on_behalf_of" }
+```
+
+**Contenção de escopo para caller humano (`grant-agent-permission`)**
+
+Caller humano com grant direto de escopo `own` não pode re-delegar em escopo `company` ou `global`. Teste despachando uma action que chame `grant-agent-permission` com `scope="global"` a partir de um usuário que só tem uma linha de escopo `own`. Esperado: resposta de erro.
+
+**Deny-wins sobrepõe grant**
+
+Insira uma linha `is_deny=true` para uma permissão, depois tente uma ação que a exija. A linha de deny deve bloquear a ação mesmo que exista um grant via role.
+
+> Estes são cenários de E2E — testes unitários WASM nativos (Rust `#[test]` com mocks das host fns) verificam a lógica interna do módulo, mas a aplicação das fronteiras de segurança exige uma instância Core real.

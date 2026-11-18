@@ -207,6 +207,7 @@ show_mode = "always"
 | `position` | integer | ❌ | Display order within the tab (lowest first). |
 | `required` | bool | ❌ | Client-side required validation in the form. |
 | `show_mode` | string | ❌ | `always` \| `create_only` \| `edit_only`. Default: `always`. |
+| `is_readonly` | bool | ❌ | When `true`, the field is always rendered but never editable. Independent of `show_mode` — use it for auto-generated values (e.g., `version`, `created_at`) that must remain visible but immutable. Default: `false`. |
 | `placeholder` | string | ❌ | Placeholder text shown inside the input. |
 | `fk_entity` | string | ❌ | Entity **slug** (not table name) for FK dropdown lookup. Required for `uuid` columns with `references`. The form renders a searchable select that queries `POST /api/read/{fk_entity}/search`. |
 

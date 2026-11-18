@@ -1191,3 +1191,73 @@ Creates a document type inside an existing group. `group_slug` must have been cr
 | `register-entity-field` | `entity_slug*`, `field_slug*`, `label*`, `field_type*`, `required`, `tab_key`, `tab_label`, `position`, `fk_entity_slug` | module | `{ok}` |
 | `create-document-type-group` | `slug*`, `label*`, `position` | module | `{ok}` |
 | `create-document-type` | `slug*`, `label*`, `group_slug*`, `position` | module | `{ok}` |
+
+---
+
+## Patterns
+
+### Validate-Before-Write (Dry-Run)
+
+WASM host functions have no explicit rollback primitive. Each `write-entity` or `execute` call commits immediately. To implement a dry-run or preflight check, perform all validation first — before any mutating calls — and only proceed when every check passes.
+
+```rust
+// 1. Validate: check existence, business rules, quota, etc.
+let existing = serde_json::from_str::<serde_json::Value>(
+    &host::read_entity(r#"{"entity":"core.products","id":"..."}"#)
+).unwrap();
+if existing["success"] != true {
+    return Err("product not found".into());
+}
+
+// 2. Only if all checks pass, mutate.
+host::write_entity(r#"{"entity":"core.products","schema_version":1,"data":{...}}"#);
+```
+
+For expensive multi-step operations, structure as: validate-all → mutate-all. Any error returned before the first `write-entity` or `execute` call leaves no side effects.
+
+---
+
+### Atomic Multi-Row Write
+
+Multiple sequential `write-entity` calls are **not atomic** — if call 3 fails, calls 1 and 2 have already committed. For true atomicity across several rows, use a single `execute` call with a CTE:
+
+```rust
+let sql = r#"
+    WITH ins_a AS (
+        INSERT INTO mod_mymodule.orders (id, customer_id)
+        VALUES (gen_random_uuid(), $1)
+        RETURNING id
+    )
+    INSERT INTO mod_mymodule.order_items (order_id, product_id, qty)
+    SELECT ins_a.id, $2, $3 FROM ins_a
+"#;
+let params = serde_json::json!(["customer-uuid", "product-uuid", 2]).to_string();
+let result = host::execute(&serde_json::json!({"sql": sql, "params": params}).to_string());
+// Either both rows are inserted or neither is.
+```
+
+Limit: `execute` can only write to tables in your module's own schema (`mod_{slug}`) or schemas your module has been explicitly granted. It cannot call `write-entity` or trigger Core side-effects (audit log, event outbox) — use `write-entity` for Core entities.
+
+---
+
+### Testing Security Boundaries
+
+The host fn runtime enforces security rules that WASM code cannot bypass. When writing integration tests, verify rejection paths explicitly:
+
+**System principal cannot set `on_behalf_of`**
+
+```bash
+# Dispatch a job that calls set-audit-context with on_behalf_of set.
+# The worker runs the job as a system principal (nil user_id).
+# Expected: { "ok": false, "error": "system principal cannot set on_behalf_of" }
+```
+
+**Human caller scope containment (`grant-agent-permission`)**
+
+A human caller with an `own`-scoped direct grant cannot re-grant at `company` or `global` scope. Test by dispatching a module action that calls `grant-agent-permission` with `scope="global"` from a user who only holds an `own`-scoped row for that permission. Expected: error response.
+
+**Deny-wins override**
+
+Insert an `is_deny=true` row for a permission, then attempt an action that requires it. The deny row must block the action even when a role-based grant also exists.
+
+> These are E2E concerns — WASM unit tests (native Rust `#[test]` with mocked host fns) can verify your module's internal logic, but security boundary enforcement requires a live Core instance.

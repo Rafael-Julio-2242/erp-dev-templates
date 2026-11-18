@@ -207,6 +207,7 @@ show_mode = "always"
 | `position` | integer | ❌ | Ordem de exibição dentro da aba (menor primeiro). |
 | `required` | bool | ❌ | Validação de obrigatório no lado do cliente. |
 | `show_mode` | string | ❌ | `always` \| `create_only` \| `edit_only`. Padrão: `always`. |
+| `is_readonly` | bool | ❌ | Quando `true`, o campo é sempre renderizado mas nunca editável. Independente do `show_mode` — use para valores gerados automaticamente (ex.: `version`, `created_at`) que devem permanecer visíveis mas imutáveis. Padrão: `false`. |
 | `placeholder` | string | ❌ | Texto placeholder exibido dentro do campo. |
 | `fk_entity` | string | ❌ | **Slug** da entidade (não o nome da tabela) para dropdown de FK. Obrigatório em colunas `uuid` com `references`. O formulário renderiza um select com busca que consulta `POST /api/read/{fk_entity}/search`. |
 
