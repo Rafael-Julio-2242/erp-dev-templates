@@ -24,12 +24,35 @@ interface host {
     storage-delete:       func(input: string) -> string;
     vector-upsert:        func(input: string) -> string;
     vector-search:        func(input: string) -> string;
+    get-caller:                  func() -> string;
+    has-permission:              func(input: string) -> string;
+    set-audit-context:           func(input: string) -> string;
+    dispatch-background:         func(input: string) -> string;
+    job-is-cancelled:            func() -> string;
+    register-background-action:  func(input: string) -> string;
+    get-secret:                  func(input: string) -> string;
+    set-secret:                  func(input: string) -> string;
+    has-secret:                  func(input: string) -> string;
+    delete-secret:               func(input: string) -> string;
+    create-agent-principal:      func(input: string) -> string;
+    deactivate-agent-principal:  func(input: string) -> string;
+    activate-agent-principal:    func(input: string) -> string;
+    grant-agent-permission:      func(input: string) -> string;
+    revoke-agent-permission:     func(input: string) -> string;
+    job-log:                     func(input: string) -> string;
+    create-permission:           func(input: string) -> string;
+    delete-permission:           func(input: string) -> string;
 }
 
 interface module-host {
-    log-mod:                  func(level: string, msg: string);
-    register-endpoint:        func(input: string) -> string;
-    register-event-handler:   func(input: string) -> string;
+    log-mod:                     func(level: string, msg: string);
+    register-endpoint:           func(input: string) -> string;
+    register-event-handler:      func(input: string) -> string;
+    register-mcp-tool:           func(input: string) -> string;
+    register-partner-type:       func(input: string) -> string;
+    register-entity-field:       func(input: string) -> string;
+    create-document-type-group:  func(input: string) -> string;
+    create-document-type:        func(input: string) -> string;
 }
 
 world module {

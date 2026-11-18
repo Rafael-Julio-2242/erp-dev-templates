@@ -1,12 +1,12 @@
 # Referência de Funções Host
 
-Todas as 23 funções de `interface host` se comunicam via strings JSON. Este documento cobre os formatos exatos de entrada/saída, requisitos de permissão e pontos de atenção.
+Todas as 41 funções de `interface host` se comunicam via strings JSON. Este documento cobre os formatos exatos de entrada/saída, requisitos de permissão e pontos de atenção.
 
 ---
 
 ## Envelopes de Resposta
 
-Cinco formatos distintos existem entre as 23 funções:
+Cinco formatos distintos existem entre as funções host:
 
 ### Padrão `{success, data, message}`
 ```json
@@ -682,6 +682,249 @@ Resultados ordenados por score decrescente (mais similar primeiro).
 
 ---
 
+## Identidade do Chamador e Auditoria
+
+### `get-caller`
+Retorna informações de identidade do contexto de execução WASM atual.
+
+**Entrada:** nenhuma (string vazia ou `""`)
+
+**Saída:**
+```json
+{
+  "user_id":        "uuid",
+  "principal_type": "human",
+  "is_superuser":   false,
+  "agent_id":       null,
+  "company_id":     "uuid",
+  "company_scope":  "global",
+  "on_behalf_of":   null
+}
+```
+
+| Campo | Notas |
+|---|---|
+| `principal_type` | `"human"` \| `"agent"` \| `"system"` |
+| `agent_id` | Preenchido quando `principal_type == "agent"` |
+| `company_scope` | `"global"` ou `["uuid", ...]` lista de empresas permitidas |
+| `on_behalf_of` | UUID do usuário humano pelo qual o job atua; `null` se não definido |
+
+---
+
+### `has-permission`
+Verifica se o chamador atual possui determinada permissão.
+
+**Entrada:** `{ "resource": "my_module.reports", "action": "export" }`
+
+**Saída:** `{ "has_permission": true }`
+
+---
+
+### `set-audit-context`
+Define metadados de auditoria para a execução atual. Campos omitidos preservam o valor herdado (semântica de merge).
+
+**Entrada:**
+```json
+{
+  "on_behalf_of":     "user-uuid",
+  "batch_id":         "uuid",
+  "triggered_by_job": "uuid"
+}
+```
+
+**Restrições:**
+- Principals sistema (nil `user_id`) não podem definir `on_behalf_of`.
+- Humanos: `on_behalf_of` deve ser igual ao próprio `user_id`.
+- Agentes em job: `on_behalf_of` deve ser igual ao valor herdado do job; não pode definir um novo quando não há herança.
+- Um `on_behalf_of` existente não pode ser alterado para um valor diferente.
+
+**Saída:** `{ "ok": true }` ou `{ "ok": false, "error": "..." }`
+
+---
+
+## Background Jobs
+
+### `register-background-action`
+Registra um tipo de ação para execução em background. Chamado em `start()`. Idempotente — reinstalar atualiza o tipo.
+
+**Entrada:**
+```json
+{
+  "name":            "send-report",
+  "title":           "Enviar Relatório Semanal",
+  "description":     null,
+  "max_attempts":    3,
+  "timeout_seconds": 300
+}
+```
+
+**Saída:** `{ "id": "uuid" }` ou `{ "error": "..." }`
+
+---
+
+### `dispatch-background`
+Enfileira um job para um tipo de ação registrado. Retorna imediatamente com um `job_id`.
+
+**Entrada:**
+```json
+{
+  "action_name":                "send-report",
+  "description":                "Enviar relatório Q1",
+  "payload":                    {},
+  "run_as":                     null,
+  "on_behalf_of":               null,
+  "intersect_with_on_behalf_of": false
+}
+```
+
+**Saída:** `{ "job_id": "uuid" }` ou `{ "error": "..." }`
+
+---
+
+### `job-is-cancelled`
+Verifica se o job atual foi solicitado a cancelar. Válido apenas dentro de execução de job.
+
+**Entrada:** nenhuma (string vazia ou `""`)
+
+**Saída:** `{ "cancelled": false }` — verifique em loops longos e retorne cedo quando `true`.
+
+---
+
+### `job-log`
+Emite uma linha de log de dentro de um job em execução. Válido apenas durante execução de job.
+
+**Entrada:** `{ "level": "info", "message": "Processando lote 3 de 10" }`
+
+`level`: `"info"` | `"warn"` | `"error"`. Mensagens truncadas em 2048 bytes UTF-8.
+
+**Saída:** `{ "ok": true }`
+
+---
+
+## Secrets
+
+### `get-secret`
+Recupera um valor secreto por nome. Secrets têm escopo de módulo.
+
+**Entrada:** `{ "name": "api_key" }`
+
+**Saída:** `{ "value": "secret-string" }` ou `{ "error": "..." }`
+
+---
+
+### `set-secret`
+Cria ou atualiza um secret.
+
+**Entrada:** `{ "name": "api_key", "value": "secret-string" }`
+
+**Saída:** `{ "ok": true }` ou `{ "error": "..." }`
+
+---
+
+### `has-secret`
+Verifica se um secret existe (sem revelar o valor).
+
+**Entrada:** `{ "name": "api_key" }`
+
+**Saída:** `{ "exists": true }`
+
+---
+
+### `delete-secret`
+Exclui um secret.
+
+**Entrada:** `{ "name": "api_key" }`
+
+**Saída:** `{ "ok": true }` ou `{ "error": "..." }`
+
+---
+
+## Agentes
+
+### `create-agent-principal`
+Cria um usuário agente pertencente a este módulo.
+
+**Entrada:** `{ "name": "report-agent", "description": "Enviador automático de relatórios" }`
+
+**Saída:** `{ "id": "uuid" }` ou `{ "error": "..." }`
+
+---
+
+### `deactivate-agent-principal`
+Desativa um agente pertencente a este módulo.
+
+**Entrada:** `{ "agent_id": "uuid" }`
+
+**Saída:** `{ "ok": true }` ou `{ "error": "..." }`
+
+---
+
+### `activate-agent-principal`
+Reativa um agente desativado pertencente a este módulo.
+
+**Entrada:** `{ "agent_id": "uuid" }`
+
+**Saída:** `{ "ok": true }` ou `{ "error": "..." }`
+
+---
+
+### `grant-agent-permission`
+Concede uma permissão a um agente pertencente a este módulo. Forneça `permission_id` ou `resource`+`action`.
+
+**Entrada:**
+```json
+{
+  "agent_id":      "uuid",
+  "permission_id": "uuid",
+  "scope":         "global",
+  "is_deny":       false,
+  "can_delegate":  false,
+  "company_id":    null,
+  "grant_depth":   0
+}
+```
+
+**Regras por tipo de chamador:**
+
+| Chamador | Regras |
+|---|---|
+| superuser / sistema | Ignora todas as verificações |
+| humano | 1. Linha `is_deny=true` → erro imediato (deny-wins). 2. Deve possuir a permissão (direta ou por role). 3. Se via linha direta: `can_delegate` obrigatório; `scope` alvo deve ser ⊆ scope do grantor. 4. Se apenas por role: `grant_depth` deve ser `0`. |
+| agente | `resource` deve começar com `{module_slug}_` ou `{module_slug}.`; deve ter linha direta; `grant_depth` < max(grant_depth) do grantor |
+
+**Saída:** `{ "id": "uuid" }` ou `{ "error": "..." }`
+
+---
+
+### `revoke-agent-permission`
+Remove uma concessão de permissão de um agente pertencente a este módulo.
+
+**Entrada:** `{ "agent_id": "uuid", "permission_id": "uuid" }`
+
+**Saída:** `{ "ok": true }` ou `{ "error": "..." }`
+
+---
+
+## Gerenciamento de Permissões
+
+### `create-permission`
+Cria uma nova permissão com escopo neste módulo. `resource` deve começar com `{module_slug}_` ou `{module_slug}.`. Idempotente.
+
+**Entrada:** `{ "resource": "my_module.reports", "action": "export", "description": "Exportar relatórios" }`
+
+**Saída:** `{ "id": "uuid", "resource": "...", "action": "..." }` ou `{ "error": "..." }`
+
+---
+
+### `delete-permission`
+Exclui uma permissão com escopo de módulo e faz cascade para todas as concessões.
+
+**Entrada:** `{ "resource": "my_module.reports", "action": "export" }`
+
+**Saída:** `{ "deleted": true, "cascade_count": 3 }` ou `{ "error": "..." }`
+
+---
+
 ## Tabela de Referência Rápida
 
 | Função | Campos de entrada (obrigatórios*) | Permissão | Envelope |
@@ -709,6 +952,24 @@ Resultados ordenados por score decrescente (mais similar primeiro).
 | `storage-delete` | `media_id*` | `storage:write` | `{success}` |
 | `vector-upsert` | `collection*`, `id*`, `embedding*`, `metadata` | `vector:write` | `{success}` |
 | `vector-search` | `collection*`, `query_embedding*`, `top_k` | `vector:read` | `{success, data[]}` |
+| `get-caller` | *(nenhum)* | nenhuma | `{user_id, principal_type, ...}` |
+| `has-permission` | `resource*`, `action*` | nenhuma | `{has_permission}` |
+| `set-audit-context` | `on_behalf_of`, `batch_id`, `triggered_by_job` | nenhuma | `{ok}` |
+| `dispatch-background` | `action_name*`, `description*`, `payload`, `run_as`, `on_behalf_of` | ctx módulo | `{job_id}` |
+| `job-is-cancelled` | *(nenhum)* | ctx job | `{cancelled}` |
+| `register-background-action` | `name*`, `title*`, `description`, `max_attempts`, `timeout_seconds` | ctx módulo | `{id}` |
+| `get-secret` | `name*` | ctx módulo | `{value}` |
+| `set-secret` | `name*`, `value*` | ctx módulo | `{ok}` |
+| `has-secret` | `name*` | ctx módulo | `{exists}` |
+| `delete-secret` | `name*` | ctx módulo | `{ok}` |
+| `create-agent-principal` | `name*`, `description` | ctx módulo | `{id}` |
+| `deactivate-agent-principal` | `agent_id*` | ctx módulo | `{ok}` |
+| `activate-agent-principal` | `agent_id*` | ctx módulo | `{ok}` |
+| `grant-agent-permission` | `agent_id*`, `permission_id` ou `resource*`+`action*`, `scope`, `is_deny`, `grant_depth` | ctx módulo | `{id}` |
+| `revoke-agent-permission` | `agent_id*`, `permission_id*` | ctx módulo | `{ok}` |
+| `job-log` | `level*`, `message*` | ctx job | `{ok}` |
+| `create-permission` | `resource*`, `action*`, `description` | ctx módulo | `{id, resource, action}` |
+| `delete-permission` | `resource*`, `action*` | ctx módulo | `{deleted, cascade_count}` |
 
 ---
 
@@ -716,7 +977,7 @@ Resultados ordenados por score decrescente (mais similar primeiro).
 
 Funções em `erp-core:component/module-host@0.1.0`. Chamadas em `start()` durante a inicialização do módulo — **não** durante execução de rotinas ou endpoints.
 
-Todas as sete funções:
+Todas as oito funções:
 - Retornam `{ "ok": true }` em sucesso ou `{ "error": "..." }` em falha
 - Exigem contexto de módulo (`module_id` presente); retornam `"no module context"` se chamadas fora de `start()`
 

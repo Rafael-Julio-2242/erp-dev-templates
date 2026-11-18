@@ -1,6 +1,6 @@
 # Host Function Reference
 
-All 23 functions from `interface host` communicate via JSON strings. This document covers exact input/output shapes, permission requirements, and gotchas.
+All 41 functions from `interface host` communicate via JSON strings. This document covers exact input/output shapes, permission requirements, and gotchas.
 
 ---
 
@@ -682,6 +682,271 @@ Results are ordered by score descending (most similar first).
 
 ---
 
+## Caller Identity & Audit
+
+### `get-caller`
+Returns identity information about the current WASM execution context.
+
+**Input:** none (empty string or `""`)
+
+**Output:**
+```json
+{
+  "user_id":        "uuid",
+  "principal_type": "human",
+  "is_superuser":   false,
+  "agent_id":       null,
+  "company_id":     "uuid",
+  "company_scope":  "global",
+  "on_behalf_of":   null
+}
+```
+
+| Field | Notes |
+|---|---|
+| `principal_type` | `"human"` \| `"agent"` \| `"system"` |
+| `agent_id` | Populated when `principal_type == "agent"` |
+| `company_scope` | `"global"` or `["uuid", ...]` array of allowed company UUIDs |
+| `on_behalf_of` | UUID of human user this job acts on behalf of; `null` if not set |
+
+---
+
+### `has-permission`
+Checks whether the current caller holds a given permission.
+
+**Input:**
+```json
+{ "resource": "my_module.reports", "action": "export" }
+```
+
+**Output:**
+```json
+{ "has_permission": true }
+```
+
+---
+
+### `set-audit-context`
+Sets audit metadata for the current execution. All fields are optional — omitted fields keep their current value (merge semantics).
+
+**Input:**
+```json
+{
+  "on_behalf_of":     "user-uuid",
+  "batch_id":         "uuid",
+  "triggered_by_job": "uuid"
+}
+```
+
+**Restrictions:**
+- System principals (nil `user_id`) cannot set `on_behalf_of`.
+- Human callers: `on_behalf_of` must equal own `user_id`.
+- Agent callers in a job: `on_behalf_of` must equal the job's inherited value; cannot set a new one when none was inherited.
+- An existing `on_behalf_of` cannot be changed to a different value.
+
+**Output:** `{ "ok": true }` or `{ "ok": false, "error": "..." }`
+
+---
+
+## Background Jobs
+
+### `register-background-action`
+Registers an action type for background execution. Called from `start()`. Idempotent — reinstall updates the action type.
+
+**Input:**
+```json
+{
+  "name":            "send-report",
+  "title":           "Send Weekly Report",
+  "description":     null,
+  "max_attempts":    3,
+  "timeout_seconds": 300
+}
+```
+
+**Output:** `{ "id": "uuid" }` or `{ "error": "..." }`
+
+---
+
+### `dispatch-background`
+Enqueues a background job for a registered action type. Returns immediately with a `job_id`.
+
+**Input:**
+```json
+{
+  "action_name":                "send-report",
+  "description":                "Send Q1 report",
+  "payload":                    {},
+  "run_as":                     null,
+  "on_behalf_of":               null,
+  "intersect_with_on_behalf_of": false
+}
+```
+
+| Field | Notes |
+|---|---|
+| `action_name` | Must match a registered action name for this module |
+| `run_as` | Agent principal UUID to run the job as (must be owned by this module) |
+| `on_behalf_of` | Human callers: must equal own `user_id`. Agents: must equal inherited `on_behalf_of`. |
+| `intersect_with_on_behalf_of` | Defaults to `true` when `on_behalf_of` is set |
+
+**Output:** `{ "job_id": "uuid" }` or `{ "error": "..." }`
+
+---
+
+### `job-is-cancelled`
+Checks whether the current background job has been cancel-requested. Valid only inside a background job execution.
+
+**Input:** none (empty string or `""`)
+
+**Output:** `{ "cancelled": false }` — poll this in long-running loops and return early when `true`.
+
+---
+
+### `job-log`
+Emits a user-defined log line from inside a running background job. Valid only during job execution. Buffered and flushed after the job exits.
+
+**Input:**
+```json
+{ "level": "info", "message": "Processing batch 3 of 10" }
+```
+
+`level`: `"info"` | `"warn"` | `"error"`. Messages truncated to 2048 UTF-8 bytes. Buffer limit: 1000 lines per job.
+
+**Output:** `{ "ok": true }` (or `{ "ok": true, "dropped": true }` when buffer full)
+
+---
+
+## Secrets
+
+### `get-secret`
+Retrieves a secret value by name. Secrets are scoped to the calling module.
+
+**Input:** `{ "name": "api_key" }`
+
+**Output:** `{ "value": "secret-string" }` or `{ "error": "..." }`
+
+---
+
+### `set-secret`
+Creates or updates a secret.
+
+**Input:** `{ "name": "api_key", "value": "secret-string" }`
+
+**Output:** `{ "ok": true }` or `{ "error": "..." }`
+
+---
+
+### `has-secret`
+Checks whether a secret exists (without revealing its value).
+
+**Input:** `{ "name": "api_key" }`
+
+**Output:** `{ "exists": true }`
+
+---
+
+### `delete-secret`
+Deletes a secret.
+
+**Input:** `{ "name": "api_key" }`
+
+**Output:** `{ "ok": true }` or `{ "error": "..." }`
+
+---
+
+## Agent Principals
+
+### `create-agent-principal`
+Creates an agent user owned by this module.
+
+**Input:**
+```json
+{ "name": "report-agent", "description": "Automated report sender" }
+```
+
+**Output:** `{ "id": "uuid" }` or `{ "error": "..." }`
+
+---
+
+### `deactivate-agent-principal`
+Deactivates an agent owned by this module. Active jobs continue; new dispatches as this agent will fail.
+
+**Input:** `{ "agent_id": "uuid" }`
+
+**Output:** `{ "ok": true }` or `{ "error": "..." }`
+
+---
+
+### `activate-agent-principal`
+Re-activates a previously deactivated agent owned by this module.
+
+**Input:** `{ "agent_id": "uuid" }`
+
+**Output:** `{ "ok": true }` or `{ "error": "..." }`
+
+---
+
+### `grant-agent-permission`
+Grants a permission to an agent owned by this module. Provide either `permission_id` or `resource`+`action`.
+
+**Input:**
+```json
+{
+  "agent_id":      "uuid",
+  "permission_id": "uuid",
+  "scope":         "global",
+  "is_deny":       false,
+  "can_delegate":  false,
+  "company_id":    null,
+  "grant_depth":   0
+}
+```
+
+**Caller type rules:**
+
+| Caller | Rules |
+|---|---|
+| superuser / system | Bypass all checks |
+| human | 1. Explicit `is_deny=true` row for caller → immediate error (deny-wins). 2. Must hold permission (direct or role). 3. If via direct row: `can_delegate` required; target `scope` must be ⊆ granter's scope (global ≥ company ≥ own). 4. If role-only: `grant_depth` must be `0`. |
+| agent | `resource` must start with `{module_slug}_` or `{module_slug}.`; must hold a direct row; `grant_depth` must be `< granter's max(grant_depth)` |
+
+**Output:** `{ "id": "uuid" }` or `{ "error": "..." }`
+
+---
+
+### `revoke-agent-permission`
+Removes a permission grant from an agent owned by this module.
+
+**Input:** `{ "agent_id": "uuid", "permission_id": "uuid" }`
+
+**Output:** `{ "ok": true }` or `{ "error": "..." }`
+
+---
+
+## Permission Management
+
+### `create-permission`
+Creates a new permission scoped to this module. `resource` must start with `{module_slug}_` or `{module_slug}.`. Idempotent.
+
+**Input:**
+```json
+{ "resource": "my_module.reports", "action": "export", "description": "Export reports" }
+```
+
+**Output:** `{ "id": "uuid", "resource": "...", "action": "..." }` or `{ "error": "..." }`
+
+---
+
+### `delete-permission`
+Deletes a module-scoped permission and cascades to all grants. Rejects system permissions.
+
+**Input:** `{ "resource": "my_module.reports", "action": "export" }`
+
+**Output:** `{ "deleted": true, "cascade_count": 3 }` or `{ "error": "..." }`
+
+---
+
 ## Quick Reference Table
 
 | Function            | Input fields (required*)                               | Permission          | Envelope     |
@@ -709,6 +974,24 @@ Results are ordered by score descending (most similar first).
 | `storage-delete`    | `media_id*`                                            | `storage:write`     | `{success}`  |
 | `vector-upsert`     | `collection*`, `id*`, `embedding*`, `metadata`         | `vector:write`      | `{success}`  |
 | `vector-search`     | `collection*`, `query_embedding*`, `top_k`             | `vector:read`       | `{success, data[]}` |
+| `get-caller`        | *(none)*                                               | none                | `{user_id, principal_type, ...}` |
+| `has-permission`    | `resource*`, `action*`                                 | none                | `{has_permission}` |
+| `set-audit-context` | `on_behalf_of`, `batch_id`, `triggered_by_job`         | none                | `{ok}`       |
+| `dispatch-background` | `action_name*`, `description*`, `payload`, `run_as`, `on_behalf_of` | module ctx | `{job_id}` |
+| `job-is-cancelled`  | *(none)*                                               | job ctx             | `{cancelled}` |
+| `register-background-action` | `name*`, `title*`, `description`, `max_attempts`, `timeout_seconds` | module ctx | `{id}` |
+| `get-secret`        | `name*`                                                | module ctx          | `{value}`    |
+| `set-secret`        | `name*`, `value*`                                      | module ctx          | `{ok}`       |
+| `has-secret`        | `name*`                                                | module ctx          | `{exists}`   |
+| `delete-secret`     | `name*`                                                | module ctx          | `{ok}`       |
+| `create-agent-principal` | `name*`, `description`                           | module ctx          | `{id}`       |
+| `deactivate-agent-principal` | `agent_id*`                                  | module ctx          | `{ok}`       |
+| `activate-agent-principal` | `agent_id*`                                    | module ctx          | `{ok}`       |
+| `grant-agent-permission` | `agent_id*`, `permission_id` or `resource*`+`action*`, `scope`, `is_deny`, `grant_depth` | module ctx | `{id}` |
+| `revoke-agent-permission` | `agent_id*`, `permission_id*`                   | module ctx          | `{ok}`       |
+| `job-log`           | `level*`, `message*`                                   | job ctx             | `{ok}`       |
+| `create-permission` | `resource*`, `action*`, `description`                  | module ctx          | `{id, resource, action}` |
+| `delete-permission` | `resource*`, `action*`                                 | module ctx          | `{deleted, cascade_count}` |
 
 ---
 
@@ -716,7 +999,7 @@ Results are ordered by score descending (most similar first).
 
 Functions in `erp-core:component/module-host@0.1.0`. Called from `start()` during module initialization — **not** during routine or endpoint execution.
 
-All seven functions:
+All eight functions:
 - Return `{ "ok": true }` on success or `{ "error": "..." }` on failure
 - Require a module context (`module_id` present); return `"no module context"` if called outside `start()`
 
