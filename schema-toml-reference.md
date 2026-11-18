@@ -126,7 +126,13 @@ label = "Notas Fiscais"     # written to meta.entity_definitions.label
 # ──────────────────────────────────────────────────────────────────────────────
 
 [[schema.extend]]
-table = "core.documents"   # must be in the extendable whitelist (see below)
+table     = "core.documents"   # must be in the extendable whitelist (see below)
+# Optional: group the new columns under a named tab in the form UI.
+# When omitted, columns appear in the entity's default "general" tab.
+tab_key       = "fiscal"        # unique key for the tab (snake_case)
+tab_label     = "Fiscal"        # display label
+tab_position  = 100             # sort order among tabs (default 100)
+tab_show_mode = "always"        # always | create_only | edit_only
 
   [[schema.extend.columns]]
   name  = "nfe_chave"      # stored as mod_{slug}_nfe_chave in the DB
@@ -267,6 +273,8 @@ Column names are automatically prefixed `mod_{module_slug}_`. **Do not include t
 | Drop index / constraint | **No** |
 
 Destructive operations are not supported for external modules. If a destructive change is required, the module must be uninstalled and reinstalled with the updated schema.
+
+> **Uninstall note:** when a module is uninstalled, `meta.field_definitions` rows for the module's extended columns are removed (so they no longer appear in forms or the read gateway), but the physical `mod_{slug}_*` columns on Core tables are **never dropped**. The data is preserved and the columns remain in the database schema.
 
 ---
 

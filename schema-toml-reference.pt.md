@@ -123,7 +123,13 @@ label = "Notas Fiscais"     # escrito em meta.entity_definitions.label
 # ──────────────────────────────────────────────────────────────────────────────
 
 [[schema.extend]]
-table = "core.documents"   # deve estar na lista de permissão de extensão (veja abaixo)
+table     = "core.documents"   # deve estar na lista de permissão de extensão (veja abaixo)
+# Opcional: agrupa as novas colunas sob uma aba nomeada no formulário da UI.
+# Quando omitido, as colunas aparecem na aba padrão "general" da entidade.
+tab_key       = "fiscal"        # chave única da aba (snake_case)
+tab_label     = "Fiscal"        # rótulo de exibição
+tab_position  = 100             # ordem de classificação entre abas (padrão 100)
+tab_show_mode = "always"        # always | create_only | edit_only
 
   [[schema.extend.columns]]
   name  = "nfe_chave"      # armazenado como mod_{slug}_nfe_chave no banco
@@ -264,6 +270,8 @@ Os nomes das colunas são automaticamente prefixados com `mod_{module_slug}_`. *
 | Remover índice / constraint | **Não** |
 
 Operações destrutivas não são suportadas para módulos externos. Se uma alteração destrutiva for necessária, o módulo deve ser desinstalado e reinstalado com o schema atualizado.
+
+> **Nota sobre desinstalação:** quando um módulo é desinstalado, as linhas de `meta.field_definitions` das colunas estendidas são removidas (e deixam de aparecer em formulários e no read gateway), mas as colunas físicas `mod_{slug}_*` nas tabelas Core **nunca são removidas**. Os dados são preservados e as colunas permanecem no schema do banco.
 
 ---
 
