@@ -959,6 +959,8 @@ Deletes a module-scoped permission and cascades to all grants. Rejects system pe
 ### `send-notification`
 Writes one notification row to `core.notifications` for a specific user or every member of a role. No RBAC check inside the host fn — the calling module is assumed to already have the appropriate grant.
 
+When `target_user_id` is set, the core also publishes a `notification.received` event to NATS immediately after the INSERT. Any SSE connection open under that user receives the event in real-time (bypasses role subscriptions; only the target user gets it). The notification row persists regardless, so callers on the role path or clients without an open SSE stream can poll `GET /api/notifications`.
+
 **Input:**
 ```json
 {
@@ -974,6 +976,8 @@ Writes one notification row to `core.notifications` for a specific user or every
 Exactly one of `target_user_id` or `target_role_slug` must be set; supplying both or neither returns an error.
 
 **Output:** `{ "success": true, "data": { "count": 3 } }` — `count` is number of rows inserted (1 for user path, N for role path).
+
+**SSE event (user path only):** event type `notification.received`, payload `{ "user_id", "title", "body", "kind" }`. The SSE stream delivers it only to the matching user; no role subscription is needed.
 
 **Errors:** `{ "success": false, "message": "target_user_id or target_role_slug is required" }` / `"only one of target_user_id or target_role_slug may be set"` / `"title is required"`
 

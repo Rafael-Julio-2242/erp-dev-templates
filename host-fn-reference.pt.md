@@ -940,6 +940,8 @@ Exclui uma permissão com escopo de módulo e faz cascade para todas as concess�
 ### `send-notification`
 Insere uma notificação em `core.notifications` para um usuário específico ou para todos os membros de um papel. Não exige permissão interna — o módulo chamador já deve ter a concessão adequada.
 
+Quando `target_user_id` é informado, o core publica o evento `notification.received` no NATS imediatamente após o INSERT. Qualquer conexão SSE aberta sob aquele usuário recebe o evento em tempo real (ignora assinaturas por papel; só o destinatário recebe). A linha de notificação persiste em qualquer caso; clientes sem SSE aberto podem usar polling em `GET /api/notifications`.
+
 **Entrada:**
 ```json
 {
@@ -955,6 +957,8 @@ Insere uma notificação em `core.notifications` para um usuário específico ou
 Exatamente um entre `target_user_id` e `target_role_slug` deve ser informado.
 
 **Saída:** `{ "success": true, "data": { "count": 3 } }` — `count` é o número de linhas inseridas.
+
+**Evento SSE (somente caminho de usuário):** tipo `notification.received`, payload `{ "user_id", "title", "body", "kind" }`. O stream SSE entrega apenas ao usuário correspondente; nenhuma assinatura por papel é necessária.
 
 **Erros:** `{ "success": false, "message": "target_user_id or target_role_slug is required" }` / `"only one of target_user_id or target_role_slug may be set"` / `"title is required"`
 
