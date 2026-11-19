@@ -1,6 +1,6 @@
 # Referência de Funções Host
 
-Todas as 41 funções de `interface host` se comunicam via strings JSON. Este documento cobre os formatos exatos de entrada/saída, requisitos de permissão e pontos de atenção.
+Todas as 56 funções de `interface host` se comunicam via strings JSON. Este documento cobre os formatos exatos de entrada/saída, requisitos de permissão e pontos de atenção.
 
 ---
 
@@ -908,11 +908,21 @@ Remove uma concessão de permissão de um agente pertencente a este módulo.
 ## Gerenciamento de Permissões
 
 ### `create-permission`
-Cria uma nova permissão com escopo neste módulo. `resource` deve começar com `{module_slug}_` ou `{module_slug}.`. Idempotente.
+Cria uma nova permissão com escopo neste módulo. `resource` deve começar com `{module_slug}_` ou `{module_slug}.`. Idempotente (`ON CONFLICT DO NOTHING`).
 
-**Entrada:** `{ "resource": "my_module.reports", "action": "export", "description": "Exportar relatórios" }`
+**Entrada:**
+```json
+{
+  "resource":       "my_module.reports",
+  "action":         "export",
+  "description":    "Exportar relatórios",
+  "agent_batch_id": "uuid (opcional)"
+}
+```
 
 **Saída:** `{ "id": "uuid", "resource": "...", "action": "..." }` ou `{ "error": "..." }`
+
+**Notas:** `description` é obrigatório (string não vazia). `agent_batch_id` armazenado em `core.permissions.agent_batch_id` — identifica permissões criadas em um batch de rastreamento de mudanças.
 
 ---
 
@@ -1013,6 +1023,255 @@ Despacha uma única chamada de ferramenta MCP e retorna o resultado.
 
 ---
 
+## Rastreamento de Mudanças
+
+Host fns para criar, inspecionar e reverter mudanças estruturais. Todas as fns estruturais rejeitam chamadas onde `principal_type == "agent"` (agent guard). `field-stats` é somente leitura e não tem guard.
+
+### Agent guard
+
+Toda fn estrutural verifica:
+```
+if ctx.principal_type == "agent" {
+    return err_json("agents cannot modify structure")
+}
+```
+O módulo de IA não pode chamar essas fns rodando como principal agente. Deve rodar como principal humano ou via rotina disparada por humano.
+
+### `register-entity`
+Cria entidade customizada em runtime (DDL + meta + página).
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:**
+```json
+{
+  "name":           "minha_entidade",
+  "label":          "Minha Entidade",
+  "module_slug":    "opcional",
+  "fields":         [{ "name": "titulo", "label": "Título", "field_type": "text", "required": false }],
+  "agent_batch_id": "uuid (opcional)"
+}
+```
+
+**Saída:** `{ "success": true, "data": { "entity_id": "uuid", "entity_slug": "custom.minha_entidade", "page_id": "uuid" } }`
+
+**Notas:**
+- `entity_slug` tem prefixo `custom.` — use para `add-entity-field` e `write-entity`.
+- `permission_ids` não estão no retorno. Recupere via `query`: `SELECT id, resource, action FROM core.permissions WHERE resource LIKE 'custom.{name}%'`.
+- `agent_batch_id` armazenado em `meta.entity_definitions.agent_batch_id`. Retorna erro se UPDATE falhar.
+- Não é idempotente — retorna erro se entidade com mesmo nome já existe.
+
+---
+
+### `add-entity-field`
+Adiciona campo a entidade customizada existente em runtime (ALTER TABLE + meta).
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:**
+```json
+{
+  "entity_slug":    "custom.minha_entidade",
+  "name":           "observacoes",
+  "label":          "Observações",
+  "field_type":     "text",
+  "required":       false,
+  "agent_batch_id": "uuid (opcional)"
+}
+```
+
+**Tipos válidos de `field_type`:** `text`, `integer`, `decimal`, `boolean`, `date`, `datetime`, `select`, `uuid`, `json`
+
+**Saída:** `{ "success": true, "data": { "field_id": "uuid", "slug": "observacoes" } }`
+
+**Notas:** Incrementa `schema_version` da entidade — clientes write devem passar a versão atualizada.
+
+---
+
+### `deactivate-field`
+Desativa campo. Writes ao campo retornam 422; schema e reads omitem o campo.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "field_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+**Notas:**
+- Define `deactivated_at = NOW()` e `deactivated_by = caller_user_id`.
+- Campo não é removido — apenas bloqueado no write gateway e omitido nos reads.
+- Schema (`GET /api/schema/entities/{slug}`) e allowlist de filtros excluem o campo enquanto desativado.
+- Reverter com `activate-field`.
+
+---
+
+### `activate-field`
+Reativa campo desativado. Campo reaparece no schema, reads e allowlist de filtros.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "field_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+---
+
+### `field-stats`
+Retorna estatísticas de preenchimento do campo.
+
+**Permissão:** `db_struct:read` | **Agent guard:** nenhum (agentes podem chamar)
+
+**Entrada:** `{ "field_id": "uuid" }`
+
+**Saída:**
+```json
+{
+  "success": true,
+  "data": {
+    "total_rows":     1000,
+    "non_null_count": 750,
+    "null_count":     250,
+    "null_pct":       25.0
+  }
+}
+```
+
+**Notas:** Uso típico: verificar antes de desativar — se `null_pct ≈ 100`, campo está vazio e é seguro desativar.
+
+---
+
+### `deactivate-entity`
+Desativa entidade customizada. Bloqueia writes; reads continuam. Cascateia para páginas.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "entity_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+**Notas:**
+- Funciona apenas em entidades com `is_custom = true`.
+- Write gateway retorna HTTP 422 (`write.deactivated_entity`) em qualquer write à entidade desativada.
+- Reads continuam funcionando normalmente.
+- Cascateia: páginas em `meta.page_definitions` com `entity_slug` correspondente recebem `is_active = false`.
+
+---
+
+### `activate-entity`
+Reativa entidade desativada. Writes voltam a funcionar. Cascateia para páginas.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "entity_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+---
+
+### `toggle-routine`
+Ativa ou desativa uma rotina.
+
+**Permissão:** `routines:update` | **Agent guard:** sim
+
+**Entrada:** `{ "routine_id": "uuid", "is_active": false }`
+
+**Saída:** `{ "success": true, "data": { "routine_id": "uuid", "is_active": false } }`
+
+**Notas:** Emite evento `routine.toggled` para o outbox (soft failure — não falha a chamada).
+
+---
+
+### `register-event-type`
+Registra tipo de evento customizado.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:**
+```json
+{
+  "slug":           "meu.modulo.evento",
+  "name":           "Meu Evento",
+  "description":    "opcional",
+  "payload_schema": {},
+  "agent_batch_id": "uuid (opcional)"
+}
+```
+
+**Saída:** `{ "success": true, "data": { "event_type_id": "uuid | null", "slug": "meu.modulo.evento" } }`
+
+**Notas:** `ON CONFLICT (slug) DO NOTHING` — idempotente. Em conflito, `event_type_id` é `null` e nada é alterado.
+
+---
+
+### `deactivate-event-type`
+Desativa tipo de evento (`is_active = false`). Não funciona em event types de sistema.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "event_type_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+---
+
+### `register-nav-folder`
+Registra pasta de navegação no menu lateral.
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:**
+```json
+{
+  "slug":           "minha-pasta",
+  "title":          "Minha Pasta",
+  "parent_id":      "uuid (opcional)",
+  "sort_order":     10,
+  "agent_batch_id": "uuid (opcional)"
+}
+```
+
+**Saída (pasta criada):** `{ "success": true, "data": { "folder_id": "uuid", "path": "/minha-pasta", "created": true } }`
+
+**Saída (conflito — pasta já existia, nada alterado):** `{ "success": true, "data": { "folder_id": null, "path": "/minha-pasta", "created": false } }`
+
+**Notas:**
+- `ON CONFLICT (path) DO NOTHING` — nunca sobrescreve pasta criada por humano ou outro módulo.
+- `agent_batch_id` armazenado apenas quando `created: true`. Quando `created: false`, `folder_id` é `null` — não passar para `deactivate-nav-folder`.
+
+---
+
+### `deactivate-nav-folder`
+Desativa pasta de navegação (`is_active = false`).
+
+**Permissão:** `db_struct:write` | **Agent guard:** sim
+
+**Entrada:** `{ "folder_id": "uuid" }`  
+**Saída:** `{ "success": true }`
+
+---
+
+### Rastreamento — `agent_batch_id`
+
+Colunas `agent_batch_id UUID NULL` adicionadas em:
+
+| Tabela | Fn que popula |
+|--------|---------------|
+| `meta.field_definitions` | `add-entity-field`, `register-entity-field` |
+| `meta.entity_definitions` | `register-entity` |
+| `core.permissions` | `create-permission` |
+| `core.event_types` | `register-event-type` |
+| `meta.page_folders` | `register-nav-folder` (só quando `created: true`) |
+
+**Query de rollback por batch:**
+```sql
+SELECT 'field'       AS tipo, id, slug                  FROM meta.field_definitions   WHERE agent_batch_id = $1
+UNION ALL
+SELECT 'entity',             id, slug                  FROM meta.entity_definitions  WHERE agent_batch_id = $1
+UNION ALL
+SELECT 'permission',         id, resource||'.'||action FROM core.permissions         WHERE agent_batch_id = $1
+UNION ALL
+SELECT 'event_type',         id, slug                  FROM core.event_types         WHERE agent_batch_id = $1
+UNION ALL
+SELECT 'nav_folder',         id, slug                  FROM meta.page_folders        WHERE agent_batch_id = $1
+```
+
+---
+
 ## Tabela de Referência Rápida
 
 | Função | Campos de entrada (obrigatórios*) | Permissão | Envelope |
@@ -1061,6 +1320,18 @@ Despacha uma única chamada de ferramenta MCP e retorna o resultado.
 | `send-notification` | `title*`, `target_user_id` ou `target_role_slug` (um obrigatório), `kind`, `body`, `data` | nenhuma | `{success, data.count}` |
 | `mcp-list-tools`    | *(nenhuma)*                                   | filtrado por RBAC | `{success, data[]}` |
 | `mcp-call-tool`     | `name*`, `arguments`                          | `mcp_tool:{nome}` ou `{slug}_mcp:{nome}` | `{success, data}` |
+| `register-entity`   | `name*`, `label*`, `fields`, `module_slug`, `agent_batch_id` | `db_struct:write` | `{success, data{entity_id,entity_slug,page_id}}` |
+| `add-entity-field`  | `entity_slug*`, `name*`, `label*`, `field_type*`, `required`, `agent_batch_id` | `db_struct:write` | `{success, data{field_id,slug}}` |
+| `deactivate-field`  | `field_id*`                                   | `db_struct:write` | `{success}` |
+| `activate-field`    | `field_id*`                                   | `db_struct:write` | `{success}` |
+| `field-stats`       | `field_id*`                                   | `db_struct:read`  | `{success, data{total_rows,non_null_count,null_count,null_pct}}` |
+| `deactivate-entity` | `entity_id*`                                  | `db_struct:write` | `{success}` |
+| `activate-entity`   | `entity_id*`                                  | `db_struct:write` | `{success}` |
+| `toggle-routine`    | `routine_id*`, `is_active*`                   | `routines:update` | `{success, data{routine_id,is_active}}` |
+| `register-event-type` | `slug*`, `name*`, `description`, `payload_schema`, `agent_batch_id` | `db_struct:write` | `{success, data{event_type_id,slug}}` |
+| `deactivate-event-type` | `event_type_id*`                          | `db_struct:write` | `{success}` |
+| `register-nav-folder` | `slug*`, `title*`, `parent_id`, `sort_order`, `agent_batch_id` | `db_struct:write` | `{success, data{folder_id,path,created}}` |
+| `deactivate-nav-folder` | `folder_id*`                              | `db_struct:write` | `{success}` |
 
 ---
 
