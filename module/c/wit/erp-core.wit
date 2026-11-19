@@ -42,6 +42,23 @@ interface host {
     job-log:                     func(input: string) -> string;
     create-permission:           func(input: string) -> string;
     delete-permission:           func(input: string) -> string;
+    send-notification:           func(input: string) -> string;
+    mcp-list-tools:              func() -> string;
+    mcp-call-tool:               func(input: string) -> string;
+    // Change tracking — structural operations (agent guard: rejected when principal_type == "agent")
+    register-entity:             func(input: string) -> string;
+    add-entity-field:            func(input: string) -> string;
+    deactivate-field:            func(input: string) -> string;
+    activate-field:              func(input: string) -> string;
+    deactivate-entity:           func(input: string) -> string;
+    activate-entity:             func(input: string) -> string;
+    toggle-routine:              func(input: string) -> string;
+    register-event-type:         func(input: string) -> string;
+    deactivate-event-type:       func(input: string) -> string;
+    register-nav-folder:         func(input: string) -> string;
+    deactivate-nav-folder:       func(input: string) -> string;
+    // Change tracking — read (available to all principals)
+    field-stats:                 func(input: string) -> string;
 }
 
 interface module-host {
