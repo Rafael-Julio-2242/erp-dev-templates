@@ -243,6 +243,7 @@ Any other type string is rejected with a 422 error before any DDL runs.
 
 `[[schema.extend]]` may target only:
 
+- `core.companies`
 - `core.documents`
 - `core.document_items`
 - `core.partners`

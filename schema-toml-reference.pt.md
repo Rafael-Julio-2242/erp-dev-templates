@@ -240,6 +240,7 @@ Qualquer outro tipo é rejeitado com erro 422 antes de qualquer DDL ser executad
 
 `[[schema.extend]]` pode ter como alvo apenas:
 
+- `core.companies`
 - `core.documents`
 - `core.document_items`
 - `core.partners`
