@@ -712,12 +712,15 @@ Returns identity information about the current WASM execution context.
 ---
 
 ### `has-permission`
-Checks whether the current caller holds a given permission.
+Checks whether a principal holds a given permission.
 
-**Input:**
+**Input — three accepted shapes:**
 ```json
+"my_module.reports:export"
 { "resource": "my_module.reports", "action": "export" }
+{ "resource": "my_module.reports", "action": "export", "principal_id": "uuid" }
 ```
+The legacy `{ "permission": "resource:action" }` shape is also accepted. When `principal_id` is provided, checks that specific principal instead of the calling context (useful for verifying an agent before dispatching on its behalf).
 
 **Output:**
 ```json
@@ -946,7 +949,7 @@ Creates a new permission scoped to this module. `resource` must start with `{mod
 ---
 
 ### `delete-permission`
-Deletes a module-scoped permission and cascades to all grants. Rejects system permissions.
+Deletes a module-scoped permission. Postgres FK constraints cascade or null-out dependent rows automatically (`user_permissions`, `role_permissions`, `page_permissions` cascade; `page_actions` and `route_definitions` set to NULL).
 
 **Input:** `{ "resource": "my_module.reports", "action": "export" }`
 

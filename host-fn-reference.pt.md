@@ -712,9 +712,15 @@ Retorna informações de identidade do contexto de execução WASM atual.
 ---
 
 ### `has-permission`
-Verifica se o chamador atual possui determinada permissão.
+Verifica se um principal possui determinada permissão.
 
-**Entrada:** `{ "resource": "my_module.reports", "action": "export" }`
+**Entrada — três formatos aceitos:**
+```json
+"my_module.reports:export"
+{ "resource": "my_module.reports", "action": "export" }
+{ "resource": "my_module.reports", "action": "export", "principal_id": "uuid" }
+```
+O formato legado `{ "permission": "resource:action" }` também é aceito. Quando `principal_id` é informado, verifica aquele principal específico em vez do contexto chamador (útil para verificar um agente antes de despachar em seu nome).
 
 **Saída:** `{ "has_permission": true }`
 
