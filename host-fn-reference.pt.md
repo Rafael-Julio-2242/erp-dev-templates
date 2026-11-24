@@ -1371,6 +1371,22 @@ Registra dinamicamente uma rota HTTP vinculada a uma rotina WASM. Mesmo efeito q
 
 `auth_required` assume `true` se omitido. `path` + `method` deve ser único para este módulo.
 
+**Parâmetros de path dinâmicos — use a sintaxe `:param`:**
+```json
+{ "path": "/items/:id",        "method": "GET",    "routine_name": "get_item" }
+{ "path": "/items/:id/notes",  "method": "POST",   "routine_name": "add_note" }
+```
+
+> **Atenção:** `{param}` (estilo chaves) **não é suportado** — o roteador trata como segmento literal, causando 404 silencioso. Use sempre `:param`.
+
+O export `call-endpoint` recebe o `path` completo como string (ex.: `/ai/items/abc-123`). Os parâmetros de path **não são pré-extraídos**; a rotina deve parseá-los do `path`:
+
+```rust
+// Rota registrada como /items/:id
+// path recebido = "/ai/items/abc-123"
+let id = path.split('/').last().unwrap_or("");
+```
+
 **Saída:**
 ```json
 { "ok": true }

@@ -1387,6 +1387,22 @@ Dynamically registers an HTTP route backed by a WASM routine. Same effect as `[[
 
 `auth_required` defaults to `true` if omitted. `path` + `method` must be unique for this module.
 
+**Dynamic path parameters — use `:param` syntax:**
+```json
+{ "path": "/items/:id",        "method": "GET",    "routine_name": "get_item" }
+{ "path": "/items/:id/notes",  "method": "POST",   "routine_name": "add_note" }
+```
+
+> **Warning:** `{param}` (curly-brace style) is **not supported** — the router treats it as a literal path segment, causing silent 404s. Always use `:param`.
+
+The `call-endpoint` export receives the raw `path` string (e.g., `/ai/items/abc-123`). Path params are **not** pre-extracted; your routine must parse them from `path`:
+
+```rust
+// Route registered as /items/:id
+// path received = "/ai/items/abc-123"
+let id = path.split('/').last().unwrap_or("");
+```
+
 **Output:**
 ```json
 { "ok": true }
