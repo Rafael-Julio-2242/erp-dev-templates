@@ -138,7 +138,7 @@ All fields except `entity` are optional. Defaults: limit=50, offset=0, sort_orde
 ### `write-entity`
 Insert or update an entity record.
 
-**Permission required:** `{entity}:write`
+**Permission required:** `{entity}:create` (INSERT — no `id`) or `{entity}:update` (UPDATE — with `id`)
 
 **Input (INSERT — omit `id`):**
 ```json
@@ -1305,7 +1305,7 @@ SELECT 'nav_folder',         id, slug             FROM meta.page_folders        
 | `log`               | `level`, `msg` (direct args, not JSON)                 | none                | none         |
 | `read-entity`       | `entity*`, `id*`                                       | `{entity}:read`     | standard     |
 | `list-entities`     | `entity*`, `filters`, `sort_by`, `sort_order`, `limit`, `offset` | `{entity}:read` | standard |
-| `write-entity`      | `entity*`, `schema_version*`, `data*`, `id`            | `{entity}:write`    | standard     |
+| `write-entity`      | `entity*`, `schema_version*`, `data*`, `id`            | `{entity}:create` (insert) or `{entity}:update` (with id) | standard     |
 | `delete-entity`     | `entity*`, `id*`                                       | `{entity}:delete`   | standard     |
 | `emit-event`        | `event_type*`, `payload`                               | `events:emit`       | standard     |
 | `call-routine`      | `name*`, `input`                                       | `{routine}:execute` | pass-through |

@@ -138,7 +138,7 @@ Campo `logic`: `"and"` ou `"or"`. Obrigatório para toda cláusula exceto a de m
 ### `write-entity`
 Insere ou atualiza um registro de entidade.
 
-**Permissão necessária:** `{entity}:write`
+**Permissão necessária:** `{entity}:create` (INSERT — sem `id`) ou `{entity}:update` (UPDATE — com `id`)
 
 **Entrada (INSERT — omitir `id`):**
 ```json
@@ -1289,7 +1289,7 @@ SELECT 'nav_folder',         id, slug                  FROM meta.page_folders   
 | `log` | `level`, `msg` (args diretos, não JSON) | nenhuma | nenhum |
 | `read-entity` | `entity*`, `id*` | `{entity}:read` | padrão |
 | `list-entities` | `entity*`, `filters`, `sort_by`, `sort_order`, `limit`, `offset` | `{entity}:read` | padrão |
-| `write-entity` | `entity*`, `schema_version*`, `data*`, `id` | `{entity}:write` | padrão |
+| `write-entity` | `entity*`, `schema_version*`, `data*`, `id` | `{entity}:create` (insert) ou `{entity}:update` (com id) | padrão |
 | `delete-entity` | `entity*`, `id*` | `{entity}:delete` | padrão |
 | `emit-event` | `event_type*`, `payload` | `events:emit` | padrão |
 | `call-routine` | `name*`, `input` | `{routine}:execute` | pass-through |
